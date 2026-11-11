@@ -29,7 +29,7 @@ Demo accounts (password is `SEED_PASSWORD` in `.env.local`):
 | Vendor (Seoul) | `vendor.kinetic@curio.example` |
 | Customer | `customer@curio.example` |
 
-The demo data is 12 sample products, 5 customers in Chennai and 8 orders at different stages. A step-by-step script for showing it to a client is in [docs/DEMO-WALKTHROUGH.md](docs/DEMO-WALKTHROUGH.md).
+The demo data is 12 sample products, about three months of generated order history (so the sales charts and forecast have something to show) and 8 named orders at different stages. A step-by-step script for showing it to a client is in [docs/DEMO-WALKTHROUGH.md](docs/DEMO-WALKTHROUGH.md).
 
 > **Demo photos:** the images in `public/demo/` come from public supplier listings and are for private demonstration only. Do not use them on a public site; replace them with the vendors' own photos before any public launch.
 
@@ -48,6 +48,7 @@ Other commands: `npm test` (unit tests), `npm run build`, `npm run db:reset` (de
 - **Order splitting.** A cart with items from several vendors becomes one order with one shipment (a `vendor_orders` document) per vendor. `src/lib/domain/cart.ts`
 - **Prices are server-side.** The browser sends only product ids and quantities; prices and stock are read from the database at checkout. Stock is decremented with a guarded update so the last unit cannot be sold twice. `src/lib/db/order-writer.ts`
 - **Verified reviews.** A review requires a paid, delivered purchase of that product, one review per customer per product (also a unique index). `src/lib/domain/reviews.ts`
+- **Sales trends and forecast.** Both dashboards chart sales by day, week and month and project the next 4 weeks with a straight-line trend and a likely range; under 4 weeks of sales it declines to forecast. The calculations are pure functions in `src/lib/domain/analytics.ts`, the queries in `src/lib/data/analytics.ts`.
 - **Vendor isolation.** Every vendor query and update is scoped by the signed-in vendor's id.
 
 ## Placeholders (owned by other teams)

@@ -1,6 +1,7 @@
 import "server-only";
 import { byId, fromDoc, getDb } from "@/lib/db/client";
 import type { FulfillmentEvent, FulfillmentStatus, Order, OrderItem, ProductStatus, VendorOrder } from "@/lib/db/schema";
+import { roundToWholeUnits } from "@/lib/domain/money";
 import { groupBy } from "./group";
 
 export interface AdminOverview {
@@ -40,7 +41,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   return {
     grossSalesMinor: sales.total,
     orderCount: sales.count,
-    averageOrderMinor: sales.paid > 0 ? Math.round(sales.total / sales.paid) : 0,
+    averageOrderMinor: sales.paid > 0 ? roundToWholeUnits(sales.total / sales.paid) : 0,
     customerCount,
     vendorCount,
     productCount,

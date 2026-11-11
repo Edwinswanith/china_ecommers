@@ -14,6 +14,12 @@ export function formatMoney(amountMinor: number, currencyCode: string): string {
   }).format(amountMinor / divisor);
 }
 
+/** Round a minor-unit amount to whole currency units (no paise). For averages and estimates, where paise are false precision. */
+export function roundToWholeUnits(amountMinor: number, minorUnits = 2): number {
+  const divisor = 10 ** minorUnits;
+  return Math.round(amountMinor / divisor) * divisor;
+}
+
 /** Parse a user-entered decimal price ("2499", "19.99") into minor units. */
 export function toMinor(input: string, minorUnits = 2): number {
   const value = input.trim();

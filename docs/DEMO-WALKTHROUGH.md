@@ -19,7 +19,9 @@ A 10 to 15 minute demo that follows one order from the customer, to the vendor, 
 
 ## What is already in the demo
 
-12 products from 3 vendors, 5 customers in Chennai and 8 orders, one at every stage:
+12 products from 3 vendors and about three months of invented order history (roughly 350 orders from 25 Chennai customers), so the sales charts and forecast have something to show. The history grows steadily week by week and is regenerated relative to today every time the data is reset.
+
+On top of that history are 8 named orders, one at every stage, which this script refers to:
 
 | Placed | Customer (area) | Items | Where it stands |
 |---|---|---|---|
@@ -51,7 +53,7 @@ A 10 to 15 minute demo that follows one order from the customer, to the vendor, 
 
 In the second browser window, sign in as `vendor.kinetic@curio.example`.
 
-1. **Overview.** New orders needing action are counted at the top.
+1. **Overview.** New orders needing action are counted at the top. Each vendor also has a few other new and in-progress orders from the background history.
 2. **Orders.** The order you just placed is at the top with status **New**. Open it.
 3. **What the vendor sees:** the items to pack, the customer's name, full delivery address and phone number, and that payment is confirmed. They do not see the other vendor's items.
 4. **Accept** the order. Status changes to *Accepted*.
@@ -59,7 +61,8 @@ In the second browser window, sign in as `vendor.kinetic@curio.example`.
 6. **Ship it.** Enter the carrier and tracking number, then *Mark as shipped*.
 7. **Mark as delivered** once it arrives (in the live system the tracking team's integration will do this automatically).
 8. Each step is recorded with date and time under *History*.
-9. **Products.** Show how a vendor adds a product: name, description, photos, specifications, price and stock. It goes live immediately, no approval step.
+9. **Sales trends** (back on Overview, lower down). The vendor sees their own sales for the last 7 and 30 days against the period before, a chart they can switch between daily, weekly and monthly, a 4-week forecast, their best sellers, and which products will run out of stock soonest. Ember Pocket Speaker is flagged to restock.
+10. **Products.** Show how a vendor adds a product: name, description, photos, specifications, price and stock. It goes live immediately, no approval step.
 
 Switch back to the customer window and refresh the order page: the tracker has moved, and the tracking number is shown.
 
@@ -80,11 +83,14 @@ Switch back to the customer window and refresh the order page: the tracker has m
 Sign in as `admin@curio.example`.
 
 1. **Overview.** Total sales, number of orders, shipments pending, shipments delivered.
-2. **Fulfilment pipeline.** How many shipments are new, accepted, packed, shipped and delivered. "3 not yet accepted" tells the owner which vendors to chase.
-3. **Sales by vendor.** Sales, shipments, pending and delivered for each vendor, plus totals by vendor country.
-4. **Orders.** Every order with customer, city, vendors involved, total, payment and status. Open one to see each vendor's shipment, package details, tracking and the customer's address.
-5. **Vendors.** One row per vendor with their sales and outstanding work.
-6. **Products.** Everything that is live across all vendors.
+2. **Fulfilment pipeline.** How many shipments are new, accepted, packed, shipped and delivered. The "not yet accepted" count tells the owner which vendors to chase.
+3. **Sales trends.** Sales for the last 7 and 30 days with the change against the period before. The chart switches between daily, weekly and monthly; hover over it to read any point.
+4. **Forecast.** The dotted line and shaded band on the weekly chart, and the panel beside it, estimate the next 4 weeks from the recent trend. Be clear it is an estimate: it extends the last 12 weeks in a straight line and knows nothing about festivals or promotions. With under 4 weeks of sales it shows "not enough history" instead.
+5. **Best sellers, weekly sales by vendor, fulfilment speed.** Which products earn the most, which vendors are growing, and how long each vendor takes to ship and deliver (Seoul Kinetic is the slowest in the demo).
+6. **Sales by vendor.** All-time sales, shipments, pending and delivered for each vendor, plus totals by vendor country.
+7. **Orders.** Every order with customer, city, vendors involved, total, payment and status. Open one to see each vendor's shipment, package details, tracking and the customer's address.
+8. **Vendors.** One row per vendor with their sales and outstanding work.
+9. **Products.** Everything that is live across all vendors.
 
 **Say:** "The owner does not approve or touch orders. This is a monitoring view: who is selling, what is stuck, and how much has been made."
 
@@ -98,4 +104,4 @@ Be clear with the client that these are stand-ins until the other teams deliver 
 - **Returns and refunds, terms and conditions:** draft policy pages.
 - **Notifications:** no emails or SMS are sent yet. Vendors see new orders in their portal.
 - **Products and photos:** sample items and photos taken from public supplier listings, for demonstration only. They must be replaced with the vendors' own products and photos before the store goes public.
-- **Customers and addresses:** invented people and addresses in Chennai.
+- **Customers, addresses and order history:** invented people, addresses and orders. The sales figures, trends and forecast in the demo are generated, not real.

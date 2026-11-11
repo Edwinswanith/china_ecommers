@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, toMinor } from "../money";
+import { formatMoney, roundToWholeUnits, toMinor } from "../money";
 import { buildOrderDraft, type CartLine, type PricedProduct } from "../cart";
 import { canTransition, nextStatuses, rollupOrderStatus, validateShipReadiness } from "../fulfillment";
 import { findReviewablePurchase, ratingAverage, type PurchaseRecord } from "../reviews";
@@ -17,6 +17,12 @@ const product = (over: Partial<PricedProduct> = {}): PricedProduct => ({
 });
 
 describe("money", () => {
+  it("rounds averages and estimates to whole rupees", () => {
+    expect(roundToWholeUnits(368908)).toBe(368900);
+    expect(roundToWholeUnits(368950)).toBe(369000);
+    expect(roundToWholeUnits(0)).toBe(0);
+  });
+
   it("formats INR from minor units", () => {
     expect(formatMoney(249900, "INR")).toBe("₹2,499");
     expect(formatMoney(249950, "INR")).toBe("₹2,499.50");

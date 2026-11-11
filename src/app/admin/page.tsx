@@ -1,11 +1,15 @@
 import { requireAdmin } from "@/lib/auth/guards";
 import { CircleCheckBig, Hourglass, IndianRupee, ShoppingCart } from "lucide-react";
 import Link from "next/link";
+import { FulfilmentSpeedPanel, VendorTrendPanel } from "@/components/dashboard/admin-analytics";
 import { AdminOrdersTable } from "@/components/dashboard/admin-orders-table";
+import { SalesAnalytics } from "@/components/dashboard/sales-analytics";
 import { PageHeader, StatTile } from "@/components/dashboard/shell";
 import { countryName } from "@/lib/config/markets";
+import { getFulfilmentSpeed, getSalesHistory, getTopProducts, getVendorSalesHistory } from "@/lib/data/analytics";
 import { getAdminOverview, listAllOrders, listVendorSales, salesByCountry } from "@/lib/data/admin";
 import type { FulfillmentStatus } from "@/lib/db/schema";
+import { parseTrendView } from "@/lib/domain/analytics";
 import { FULFILLMENT_LABELS } from "@/lib/domain/fulfillment";
 import { formatMoney } from "@/lib/domain/money";
 
@@ -17,9 +21,24 @@ const PIPELINE: ReadonlyArray<{ status: FulfillmentStatus; className: string }> 
   { status: "delivered", className: "bg-ok text-white" },
 ];
 
-export default async function AdminOverviewPage() {
+const VENDOR_TREND_DAYS = 84;
+
+interface AdminOverviewPageProps {
+  searchParams: Promise<{ view?: string }>;
+}
+
+export default async function AdminOverviewPage({ searchParams }: AdminOverviewPageProps) {
   await requireAdmin();
-  const [overview, vendorSales, recentOrders] = await Promise.all([getAdminOverview(), listVendorSales(), listAllOrders(6)]);
+  const view = parseTrendView((await searchParams).view);
+  const [overview, vendorSales, recentOrders, history, topProducts, vendorTrend, speed] = await Promise.all([
+    getAdminOverview(),
+    listVendorSales(),
+    listAllOrders(6),
+    getSalesHistory(),
+    getTopProducts(),
+    getVendorSalesHistory(VENDOR_TREND_DAYS),
+    getFulfilmentSpeed(),
+  ]);
   const countries = salesByCountry(vendorSales);
   const pending = overview.shipments.new + overview.shipments.accepted + overview.shipments.packed;
   const liveShipments = PIPELINE.reduce((sum, p) => sum + overview.shipments[p.status], 0);
@@ -64,7 +83,15 @@ export default async function AdminOverviewPage() {
         )}
       </section>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[2fr_1fr]">
+      <SalesAnalytics basePath="/admin" view={view} history={history} topProducts={topProducts} ordersLabel="Orders" />
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <VendorTrendPanel vendors={vendorTrend} endDay={history.endDay} />
+        <FulfilmentSpeedPanel rows={speed} />
+      </div>
+
+      <h2 className="mt-10 text-[18px] font-bold tracking-tight">All-time totals</h2>
+      <div className="mt-4 grid gap-6 xl:grid-cols-[2fr_1fr]">
         <section className="panel" aria-labelledby="vendor-sales-heading">
           <div className="flex items-baseline justify-between border-b border-line px-5 py-4">
             <h2 id="vendor-sales-heading" className="text-[18px] font-bold tracking-tight">Sales by vendor</h2>

@@ -3,12 +3,14 @@ import { buildOrderDraft, type CartLine, type PricedProduct } from "@/lib/domain
 import type { FulfillmentStatus } from "@/lib/domain/fulfillment";
 import { newId, type Db } from "./client";
 import { insertOrder } from "./order-writer";
+import { buildHistoryCustomers, buildOrderHistory } from "./seed-history";
 import type { Product, ShippingAddress } from "./schema";
 import { SEED_ADMIN, SEED_CATEGORIES, SEED_CUSTOMERS, SEED_PRODUCTS, SEED_VENDORS } from "./seed-data";
 
 const FLOW: readonly FulfillmentStatus[] = ["new", "accepted", "packed", "shipped", "delivered"];
 
 const DAY_MS = 86_400_000;
+const HISTORY_CUSTOMER_COUNT = 20;
 const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
 
 /** Demo delivery addresses, all in Chennai. People, phone numbers and streets are made up. */
@@ -151,6 +153,16 @@ export async function seed(db: Db): Promise<void> {
     priceMinor: p.priceMinor, currency: p.currency, stock: p.stock, purchasable: true,
   }));
 
+  // Three months of background orders so the sales charts and forecast have history to work with.
+  const shoppers = buildHistoryCustomers(HISTORY_CUSTOMER_COUNT);
+  await db.users.insertMany(shoppers.map((s) => ({ _id: s.id, email: s.email, name: s.name, passwordHash, role: "customer" as const, createdAt: now })));
+  const history = buildOrderHistory({ now, products: productRows, vendorKeyById: vendorKey, customers: shoppers });
+  await db.orders.insertMany(history.orders);
+  await db.vendorOrders.insertMany(history.vendorOrders);
+  await db.orderItems.insertMany(history.orderItems);
+  await db.fulfillmentEvents.insertMany(history.fulfillmentEvents);
+
+  // The named, staged orders the walkthrough script refers to.
   for (const [index, seedOrder] of SEED_ORDERS.entries()) {
     const lines: CartLine[] = seedOrder.lines.map(([slug, quantity]) => ({ productId: bySlug.get(slug)!.id, quantity }));
     const result = buildOrderDraft(lines, catalog);
