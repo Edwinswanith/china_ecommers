@@ -68,7 +68,7 @@ Other commands: `npm test` (unit tests), `npm run build`, `npm run db:reset` (de
 - `/llms.txt` is a live plain-text summary of the catalogue with prices, stock and ratings for AI assistants.
 - Product pages are written answer-first: what it is, key facts, a specification table and per-product Q&A that vendors fill in.
 
-Set `NEXT_PUBLIC_SITE_URL` to the real domain before launch; canonical URLs and structured data are built from it.
+Set `SITE_URL` to the real domain before launch; canonical URLs and structured data are built from it. On Vercel it defaults to the project's own address if you leave it out.
 
 ## Structure
 
@@ -86,14 +86,14 @@ src/lib/config/      brand, markets and currencies, policies, FAQs
 ## Deploying to Vercel
 
 1. Import the GitHub repository in Vercel.
-2. Under Settings → Environment Variables add `MONGODB_URI`, `MONGODB_DB`, `SESSION_SECRET` and `NEXT_PUBLIC_SITE_URL` (the Vercel address, no trailing slash).
+2. Under Settings → Environment Variables add `MONGODB_URI`, `MONGODB_DB` and `SESSION_SECRET`. `SITE_URL` is optional: add it only when you connect your own domain.
 3. In MongoDB Atlas → Network Access, allow access from anywhere (`0.0.0.0/0`). Vercel does not use fixed IP addresses.
 4. Deploy. The site reads the same database you seeded with `npm run db:seed`.
 
 ## Going to production
 
 1. Create a separate MongoDB database for production and set `MONGODB_URI` and `MONGODB_DB`. It must be a replica set (every Atlas cluster is): checkout, reviews and shipment updates use transactions.
-2. Set a fresh `SESSION_SECRET` (`openssl rand -hex 32`) and `NEXT_PUBLIC_SITE_URL`.
+2. Set a fresh `SESSION_SECRET` (`openssl rand -hex 32`) and `SITE_URL`.
 3. Uploaded product photos are stored in the `media` collection (4 MB limit each), which is fine to start with. For a large catalogue, reimplement the two functions in `src/lib/storage.ts` against S3 or R2.
 4. Replace the in-memory rate limiter in `src/lib/rate-limit.ts` with a shared store if running more than one instance.
 5. Create the admin account directly in the database; there is no public admin sign-up.
