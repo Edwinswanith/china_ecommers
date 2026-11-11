@@ -30,10 +30,12 @@ export default async function OrdersPage() {
           {orders.map((order) => (
             <li key={order.id}>
               <Link href={`/orders/${order.id}`} className="lift group flex items-center gap-4 rounded-2xl border border-line bg-white p-4 sm:p-5">
-                <div className="flex shrink-0 -space-x-3">
-                  {order.items.slice(0, 3).map((item) => (
-                    <div key={item.id} className="w-14 overflow-hidden rounded-xl border-2 border-white shadow-sm"><ProductImage src={item.image} alt="" sizes="56px" /></div>
+                {/* Phones show one photo with a count; wider screens show up to three. */}
+                <div className="relative flex shrink-0 -space-x-3">
+                  {order.items.slice(0, 3).map((item, index) => (
+                    <div key={item.id} className={`w-14 overflow-hidden rounded-xl border-2 border-white shadow-sm ${index > 0 ? "hidden sm:block" : ""}`}><ProductImage src={item.image} alt="" sizes="56px" /></div>
                   ))}
+                  {order.items.length > 1 ? <span className="num absolute -bottom-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-fg px-1 text-[11px] font-bold text-white sm:hidden">+{order.items.length - 1}</span> : null}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2.5">
@@ -44,9 +46,10 @@ export default async function OrdersPage() {
                   <p className="mt-0.5 text-[13px] text-subtle">
                     {formatDate(order.createdAt)} · {order.vendorOrders.length} {order.vendorOrders.length === 1 ? "delivery" : "deliveries"}
                   </p>
+                  <p className="num mt-1.5 text-[16px] font-bold sm:hidden">{formatMoney(order.totalMinor, order.currency)}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="num text-[17px] font-bold">{formatMoney(order.totalMinor, order.currency)}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="num hidden text-[17px] font-bold sm:inline">{formatMoney(order.totalMinor, order.currency)}</span>
                   <ChevronRight size={18} className="text-subtle transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </div>
               </Link>

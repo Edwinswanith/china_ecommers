@@ -60,19 +60,19 @@ export function CartView() {
   const units = data.rows.reduce((sum, r) => sum + r.line.quantity, 0);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1.7fr_1fr]">
-      <ul>
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.7fr_1fr]">
+      <ul className="min-w-0">
         {data.rows.map(({ line, product }) => {
           const max = Math.min(product.stock, MAX_QUANTITY_PER_LINE);
           const short = product.stock < line.quantity;
           return (
-            <li key={product.id} className={`${leaving.has(product.id) ? "row-leave" : "animate-fade"} mb-4 flex gap-4 rounded-2xl border border-line bg-white p-4 sm:gap-5`}>
-              <Link href={`/products/${product.slug}`} className="w-24 shrink-0 self-start overflow-hidden rounded-xl sm:w-28">
+            <li key={product.id} className={`${leaving.has(product.id) ? "row-leave" : "animate-fade"} mb-4 flex gap-3 rounded-2xl border border-line bg-white p-4 sm:gap-5`}>
+              <Link href={`/products/${product.slug}`} className="w-20 shrink-0 self-start overflow-hidden rounded-xl sm:w-28">
                 <ProductImage src={product.image} alt={product.name} sizes="112px" />
               </Link>
               <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
                     <Link href={`/products/${product.slug}`} className="text-[16px] font-semibold leading-snug tracking-tight transition-colors hover:text-brand">{product.name}</Link>
                     <p className="mt-1 text-[13.5px] text-subtle">Sold by {product.vendorName} · Ships from {countryName(product.vendorCountry)}</p>
                   </div>
@@ -83,14 +83,14 @@ export function CartView() {
                     {product.stock === 0 ? "This item is now out of stock. Please remove it to continue." : `Only ${product.stock} left. Please reduce the quantity.`}
                   </p>
                 ) : null}
-                <div className="mt-auto flex items-center justify-between gap-4 pt-4">
+                <div className="mt-auto flex items-center justify-between gap-2 pt-4 sm:gap-4">
                   <div className="flex items-center overflow-hidden rounded-lg border border-line" role="group" aria-label={`Quantity of ${product.name}`}>
                     <button type="button" className={stepper} disabled={line.quantity <= 1} onClick={() => cart.setQuantity(product.id, line.quantity - 1)} aria-label="Decrease quantity"><Minus size={15} /></button>
                     <span className="num grid w-9 place-items-center text-[14px] font-semibold">{line.quantity}</span>
                     <button type="button" className={stepper} disabled={line.quantity >= max} onClick={() => cart.setQuantity(product.id, line.quantity + 1)} aria-label="Increase quantity"><Plus size={15} /></button>
                   </div>
                   <button type="button" className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13.5px] font-medium text-subtle transition-colors hover:bg-red-50 hover:text-danger" onClick={() => removeLine(product.id, product.name, line.quantity)} aria-label={`Remove ${product.name}`}>
-                    <Trash2 size={15} aria-hidden="true" /> Remove
+                    <Trash2 size={15} aria-hidden="true" /> <span className="max-[359px]:sr-only">Remove</span>
                   </button>
                 </div>
               </div>
