@@ -1,0 +1,31 @@
+"use server";
+
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { requireAdmin } from "@/lib/auth/guards";
+import { getDb } from "@/lib/db/client";
+import { products, vendors } from "@/lib/db/schema";
+
+const vendorStatusInput = z.object({ vendorId: z.uuid(), status: z.enum(["active", "suspended"]) });
+const productStatusInput = z.object({ productId: z.uuid(), status: z.enum(["active", "archived"]) });
+
+/** Suspending a vendor hides all their products from the storefront immediately. */
+export async function setVendorStatusAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const parsed = vendorStatusInput.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return;
+  const db = await getDb();
+  await db.update(vendors).set({ status: parsed.data.status }).where(eq(vendors.id, parsed.data.vendorId));
+  revalidatePath("/", "layout");
+}
+
+/** Products go live without approval, so the admin's control is a takedown. */
+export async function setProductStatusAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const parsed = productStatusInput.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return;
+  const db = await getDb();
+  await db.update(products).set({ status: parsed.data.status, updatedAt: new Date() }).where(eq(products.id, parsed.data.productId));
+  revalidatePath("/", "layout");
+}
