@@ -8,6 +8,7 @@ import { PageHeader, StatTile } from "@/components/dashboard/shell";
 import { countryName } from "@/lib/config/markets";
 import { getFulfilmentSpeed, getSalesHistory, getTopProducts, getVendorSalesHistory } from "@/lib/data/analytics";
 import { getAdminOverview, listAllOrders, listVendorSales, salesByCountry } from "@/lib/data/admin";
+import { getAdminScope } from "@/lib/data/admin-scope";
 import type { FulfillmentStatus } from "@/lib/db/schema";
 import { parseTrendView } from "@/lib/domain/analytics";
 import { FULFILLMENT_LABELS } from "@/lib/domain/fulfillment";
@@ -30,14 +31,15 @@ interface AdminOverviewPageProps {
 export default async function AdminOverviewPage({ searchParams }: AdminOverviewPageProps) {
   await requireAdmin();
   const view = parseTrendView((await searchParams).view);
+  const { resolved, label } = await getAdminScope();
   const [overview, vendorSales, recentOrders, history, topProducts, vendorTrend, speed] = await Promise.all([
-    getAdminOverview(),
-    listVendorSales(),
-    listAllOrders(6),
-    getSalesHistory(),
-    getTopProducts(),
-    getVendorSalesHistory(VENDOR_TREND_DAYS),
-    getFulfilmentSpeed(),
+    getAdminOverview(resolved),
+    listVendorSales(resolved),
+    listAllOrders(6, resolved),
+    getSalesHistory(resolved),
+    getTopProducts(resolved),
+    getVendorSalesHistory(VENDOR_TREND_DAYS, resolved),
+    getFulfilmentSpeed(resolved),
   ]);
   const countries = salesByCountry(vendorSales);
   const pending = overview.shipments.new + overview.shipments.accepted + overview.shipments.packed;
@@ -46,7 +48,7 @@ export default async function AdminOverviewPage({ searchParams }: AdminOverviewP
 
   return (
     <>
-      <PageHeader eyebrow="All vendors · India market" title="Overview" />
+      <PageHeader eyebrow={label} title="Overview" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile icon={IndianRupee} label="Total sales" value={formatMoney(overview.grossSalesMinor, "INR")} count={{ value: overview.grossSalesMinor, format: "money" }} note={`Average order ${formatMoney(overview.averageOrderMinor, "INR")}`} tone="dark" />
@@ -144,7 +146,7 @@ export default async function AdminOverviewPage({ searchParams }: AdminOverviewP
               </li>
             ))}
           </ul>
-          <p className="label border-t border-line px-5 py-3 text-subtle">{overview.productCount} live products on the store</p>
+          <p className="label border-t border-line px-5 py-3 text-subtle">{overview.productCount} live {overview.productCount === 1 ? "product" : "products"}{resolved.vendorIds ? " from these vendors" : " on the store"}</p>
         </section>
       </div>
 

@@ -1,7 +1,9 @@
 import "server-only";
-import { byId, fromDoc, getDb } from "@/lib/db/client";
+import { byId, fromDoc, getDb, type Db } from "@/lib/db/client";
 import type { FulfillmentEvent, FulfillmentStatus, Order, OrderItem, ProductStatus, VendorOrder } from "@/lib/db/schema";
+import { scopeOrderShipments } from "@/lib/domain/country-scope";
 import { roundToWholeUnits } from "@/lib/domain/money";
+import { marketStages, UNSCOPED, vendorMatch, type ResolvedScope } from "./admin-scope";
 import { groupBy } from "./group";
 
 export interface AdminOverview {
@@ -16,33 +18,89 @@ export interface AdminOverview {
 
 const EMPTY_COUNTS: Record<FulfillmentStatus, number> = { new: 0, accepted: 0, packed: 0, shipped: 0, delivered: 0, cancelled: 0 };
 
-export async function getAdminOverview(): Promise<AdminOverview> {
-  const db = await getDb();
-  const paid = { $eq: ["$paymentStatus", "paid"] };
-  const [salesRows, customerCount, vendorCount, productCount, shipmentRows] = await Promise.all([
-    db.orders
-      .aggregate<{ total: number; count: number; paid: number }>([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: { $cond: [paid, "$totalMinor", 0] } },
-            count: { $sum: 1 },
-            paid: { $sum: { $cond: [paid, 1, 0] } },
-          },
+interface SalesTotals {
+  readonly total: number;
+  readonly count: number;
+  readonly paid: number;
+  readonly customers: number;
+}
+
+const NO_SALES: SalesTotals = { total: 0, count: 0, paid: 0, customers: 0 };
+const isPaid = (field: string) => ({ $eq: [field, "paid"] });
+const countCustomers = { $project: { total: 1, count: 1, paid: 1, customers: { $size: "$customers" } } };
+
+/** Whole-order totals, for every vendor country. */
+async function orderTotals(db: Db, market: string | null): Promise<SalesTotals> {
+  const rows = await db.orders
+    .aggregate<SalesTotals>([
+      ...(market ? [{ $match: { marketCountry: market } }] : []),
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $cond: [isPaid("$paymentStatus"), "$totalMinor", 0] } },
+          count: { $sum: 1 },
+          paid: { $sum: { $cond: [isPaid("$paymentStatus"), 1, 0] } },
+          customers: { $addToSet: "$customerId" },
         },
-      ])
-      .toArray(),
+      },
+      countCustomers,
+    ])
+    .toArray();
+  return rows[0] ?? NO_SALES;
+}
+
+/**
+ * Totals for selected vendors only. An order counts once, for the value of
+ * its shipments from those vendors, so each country's figures add up to the whole.
+ */
+async function shipmentTotals(db: Db, scope: ResolvedScope): Promise<SalesTotals> {
+  const rows = await db.vendorOrders
+    .aggregate<SalesTotals>([
+      { $match: vendorMatch(scope) },
+      { $lookup: { from: "orders", localField: "orderId", foreignField: "_id", as: "order" } },
+      { $unwind: "$order" },
+      ...(scope.market ? [{ $match: { "order.marketCountry": scope.market } }] : []),
+      {
+        $group: {
+          _id: "$orderId",
+          paid: { $max: { $cond: [isPaid("$order.paymentStatus"), 1, 0] } },
+          salesMinor: { $sum: { $cond: [{ $ne: ["$status", "cancelled"] }, "$subtotalMinor", 0] } },
+          customerId: { $first: "$order.customerId" },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $cond: [{ $eq: ["$paid", 1] }, "$salesMinor", 0] } },
+          count: { $sum: 1 },
+          paid: { $sum: "$paid" },
+          customers: { $addToSet: "$customerId" },
+        },
+      },
+      countCustomers,
+    ])
+    .toArray();
+  return rows[0] ?? NO_SALES;
+}
+
+export async function getAdminOverview(scope: ResolvedScope = UNSCOPED): Promise<AdminOverview> {
+  const db = await getDb();
+  const filtered = scope.vendorIds !== null || scope.market !== null;
+  const [sales, registeredCustomers, vendorCount, productCount, shipmentRows] = await Promise.all([
+    scope.vendorIds ? shipmentTotals(db, scope) : orderTotals(db, scope.market),
     db.users.countDocuments({ role: "customer" }),
-    db.vendors.countDocuments(),
-    db.products.countDocuments({ status: "active" }),
-    db.vendorOrders.aggregate<{ _id: FulfillmentStatus; count: number }>([{ $group: { _id: "$status", count: { $sum: 1 } } }]).toArray(),
+    db.vendors.countDocuments(scope.vendorIds ? { _id: { $in: [...scope.vendorIds] } } : {}),
+    db.products.countDocuments({ status: "active", ...vendorMatch(scope) }),
+    db.vendorOrders
+      .aggregate<{ _id: FulfillmentStatus; count: number }>([{ $match: vendorMatch(scope) }, ...marketStages(scope), { $group: { _id: "$status", count: { $sum: 1 } } }])
+      .toArray(),
   ]);
-  const sales = salesRows[0] ?? { total: 0, count: 0, paid: 0 };
   return {
     grossSalesMinor: sales.total,
     orderCount: sales.count,
     averageOrderMinor: sales.paid > 0 ? roundToWholeUnits(sales.total / sales.paid) : 0,
-    customerCount,
+    // With a country selected, count the customers who ordered within it; otherwise everyone registered.
+    customerCount: filtered ? sales.customers : registeredCustomers,
     vendorCount,
     productCount,
     shipments: shipmentRows.reduce((acc, row) => ({ ...acc, [row._id]: row.count }), EMPTY_COUNTS),
@@ -74,14 +132,16 @@ interface VendorShipmentTotals {
 }
 
 /** Sales and fulfilment health per vendor, highest revenue first. */
-export async function listVendorSales(): Promise<VendorSalesRow[]> {
+export async function listVendorSales(scope: ResolvedScope = UNSCOPED): Promise<VendorSalesRow[]> {
   const db = await getDb();
   const countIf = (condition: unknown) => ({ $sum: { $cond: [condition, 1, 0] } });
   const [vendorDocs, shipmentTotals, productTotals] = await Promise.all([
-    db.vendors.find().toArray(),
+    db.vendors.find(scope.vendorIds ? { _id: { $in: [...scope.vendorIds] } } : {}).toArray(),
     db.vendorOrders
       .aggregate<VendorShipmentTotals>([
+        { $match: vendorMatch(scope) },
         { $lookup: { from: "orders", localField: "orderId", foreignField: "_id", as: "order" } },
+        ...(scope.market ? [{ $match: { "order.marketCountry": scope.market } }] : []),
         { $set: { paid: { $in: ["paid", "$order.paymentStatus"] } } },
         {
           $group: {
@@ -141,25 +201,40 @@ export function salesByCountry(rows: readonly VendorSalesRow[]): CountrySalesRow
 
 const UNKNOWN_CUSTOMER = { name: "Deleted account", email: "" } as const;
 
-export async function listAllOrders(limit = 200) {
+/**
+ * Latest orders. With a vendor country selected, an order appears if any of
+ * its shipments come from that country, and only that part of it is shown.
+ */
+export async function listAllOrders(limit = 200, scope: ResolvedScope = UNSCOPED) {
   const db = await getDb();
-  const orders = (await db.orders.find().sort({ createdAt: -1 }).limit(limit).toArray()).map((doc) => fromDoc<Order>(doc));
+  const scopedOrderIds = scope.vendorIds ? await db.vendorOrders.distinct("orderId", vendorMatch(scope)) : null;
+  const filter = {
+    ...(scope.market ? { marketCountry: scope.market } : {}),
+    ...(scopedOrderIds ? { _id: { $in: scopedOrderIds } } : {}),
+  };
+  const orders = (await db.orders.find(filter).sort({ createdAt: -1 }).limit(limit).toArray()).map((doc) => fromDoc<Order>(doc));
   const orderIds = orders.map((o) => o.id);
   const [customers, shipmentDocs, itemDocs] = await Promise.all([
     byId(db.users, orders.map((o) => o.customerId)),
     db.vendorOrders.find({ orderId: { $in: orderIds } }).sort({ createdAt: 1, _id: 1 }).toArray(),
-    db.orderItems.find({ orderId: { $in: orderIds } }, { projection: { orderId: 1, quantity: 1 } }).toArray(),
+    db.orderItems.find({ orderId: { $in: orderIds } }, { projection: { orderId: 1, vendorOrderId: 1, quantity: 1 } }).toArray(),
   ]);
   const vendors = await byId(db.vendors, shipmentDocs.map((s) => s.vendorId));
   const shipments = groupBy(shipmentDocs.map((doc) => fromDoc<VendorOrder>(doc)), (s) => s.orderId);
   const items = groupBy(itemDocs, (i) => i.orderId);
+  const vendorIds = scope.vendorIds ? new Set(scope.vendorIds) : null;
   return orders.map((order) => {
     const customer = customers.get(order.customerId);
+    const scoped = scopeOrderShipments(shipments.get(order.id) ?? [], vendorIds, order.totalMinor);
+    const shownShipmentIds = new Set(scoped.shipments.map((s) => s.id));
     return {
       ...order,
       customer: customer ? { name: customer.name, email: customer.email } : UNKNOWN_CUSTOMER,
-      vendorOrders: (shipments.get(order.id) ?? []).map((s) => ({ ...s, vendor: { name: vendors.get(s.vendorId)?.name ?? "Vendor" } })),
-      items: (items.get(order.id) ?? []).map((i) => ({ quantity: i.quantity })),
+      vendorOrders: scoped.shipments.map((s) => ({ ...s, vendor: { name: vendors.get(s.vendorId)?.name ?? "Vendor" } })),
+      items: (items.get(order.id) ?? []).filter((i) => shownShipmentIds.has(i.vendorOrderId)).map((i) => ({ quantity: i.quantity })),
+      /** The value shown for this order: only the selected vendors' part when `partial`. */
+      scopedTotalMinor: scoped.totalMinor,
+      partial: scoped.partial,
     };
   });
 }
@@ -206,9 +281,9 @@ export interface AdminProductRow {
   readonly categoryName: string;
 }
 
-export async function listAllProducts(): Promise<AdminProductRow[]> {
+export async function listAllProducts(scope: ResolvedScope = UNSCOPED): Promise<AdminProductRow[]> {
   const db = await getDb();
-  const docs = await db.products.find().sort({ createdAt: -1, _id: 1 }).limit(500).toArray();
+  const docs = await db.products.find(vendorMatch(scope)).sort({ createdAt: -1, _id: 1 }).limit(500).toArray();
   const [vendors, categories] = await Promise.all([
     byId(db.vendors, docs.map((p) => p.vendorId)),
     byId(db.categories, docs.map((p) => p.categoryId)),

@@ -3,7 +3,9 @@ import { requireAdmin } from "@/lib/auth/guards";
 import Link from "next/link";
 import { AdminOrdersTable } from "@/components/dashboard/admin-orders-table";
 import { PageHeader } from "@/components/dashboard/shell";
+import { countryName } from "@/lib/config/markets";
 import { listAllOrders } from "@/lib/data/admin";
+import { getAdminScope } from "@/lib/data/admin-scope";
 import { rollupOrderStatus, type OrderStatus } from "@/lib/domain/fulfillment";
 
 export const metadata: Metadata = { title: "Orders" };
@@ -24,12 +26,13 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
   await requireAdmin();
   const { view } = await searchParams;
   const active = VIEWS.find((v) => v.key === view) ?? VIEWS[0];
-  const all = await listAllOrders();
+  const { scope, resolved, label } = await getAdminScope();
+  const all = await listAllOrders(undefined, resolved);
   const statusOf = (order: (typeof all)[number]): OrderStatus => rollupOrderStatus(order.vendorOrders.map((v) => v.status));
   const rows = active.statuses ? all.filter((order) => active.statuses?.includes(statusOf(order))) : all;
   return (
     <>
-      <PageHeader eyebrow="Every vendor" title="Orders" />
+      <PageHeader eyebrow={label} title="Orders" />
       <nav aria-label="Filter orders" className="mb-5 flex flex-wrap gap-2">
         {VIEWS.map((v) => {
           const count = v.statuses ? all.filter((order) => v.statuses?.includes(statusOf(order))).length : all.length;
@@ -45,6 +48,11 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           );
         })}
       </nav>
+      {scope.vendorCountry ? (
+        <p className="mb-4 max-w-2xl text-[14px] text-subtle">
+          Orders with at least one item from a vendor in {countryName(scope.vendorCountry)}. Where an order also has items from other countries, only the {countryName(scope.vendorCountry)} part is shown and counted.
+        </p>
+      ) : null}
       <AdminOrdersTable rows={rows} />
     </>
   );

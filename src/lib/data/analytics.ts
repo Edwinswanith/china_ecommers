@@ -21,9 +21,18 @@ const SPEED_DAYS = 90;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
-/** Optional scope: one vendor's figures, or the whole store when omitted. */
+/** Optional scope: one vendor's figures, a set of vendors, one customer market, or the whole store when omitted. */
 export interface AnalyticsScope {
   readonly vendorId?: string;
+  /** Several vendors, e.g. every vendor in one country. */
+  readonly vendorIds?: readonly string[] | null;
+  /** Only orders placed from this market (the customer's country). */
+  readonly market?: string | null;
+}
+
+function vendorCondition(scope: AnalyticsScope): Document {
+  if (scope.vendorId) return { vendorId: scope.vendorId };
+  return scope.vendorIds ? { vendorId: { $in: scope.vendorIds } } : {};
 }
 
 const dayKeyExpression = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: STORE_TIME_ZONE } };
@@ -34,9 +43,9 @@ const dayKeyExpression = { $dateToString: { format: "%Y-%m-%d", date: "$createdA
  */
 function soldShipments(scope: AnalyticsScope, since: Date): Document[] {
   return [
-    { $match: { createdAt: { $gte: since }, status: { $ne: "cancelled" }, ...(scope.vendorId ? { vendorId: scope.vendorId } : {}) } },
+    { $match: { createdAt: { $gte: since }, status: { $ne: "cancelled" }, ...vendorCondition(scope) } },
     { $lookup: { from: "orders", localField: "orderId", foreignField: "_id", as: "order" } },
-    { $match: { "order.paymentStatus": "paid" } },
+    { $match: { "order.paymentStatus": "paid", ...(scope.market ? { "order.marketCountry": scope.market } : {}) } },
   ];
 }
 
@@ -103,13 +112,13 @@ export interface VendorDailySales {
 }
 
 /** Daily sales per vendor over the last `days` days, highest total first. */
-export async function getVendorSalesHistory(days: number, now: Date = new Date()): Promise<VendorDailySales[]> {
+export async function getVendorSalesHistory(days: number, scope: AnalyticsScope = {}, now: Date = new Date()): Promise<VendorDailySales[]> {
   const db = await getDb();
   const endDay = dayKeyOf(now);
   const since = new Date(now.getTime() - (days + 1) * DAY_MS);
   const rows = await db.vendorOrders
     .aggregate<{ _id: { day: string; vendorId: string }; salesMinor: number }>([
-      ...soldShipments({}, since),
+      ...soldShipments(scope, since),
       { $group: { _id: { day: dayKeyExpression, vendorId: "$vendorId" }, salesMinor: { $sum: "$subtotalMinor" } } },
     ])
     .toArray();
@@ -204,13 +213,19 @@ export interface FulfilmentSpeed {
 }
 
 /** How quickly each vendor ships and delivers, slowest to ship first. Last 90 days. */
-export async function getFulfilmentSpeed(now: Date = new Date()): Promise<FulfilmentSpeed[]> {
+export async function getFulfilmentSpeed(scope: AnalyticsScope = {}, now: Date = new Date()): Promise<FulfilmentSpeed[]> {
   const db = await getDb();
   const since = new Date(now.getTime() - SPEED_DAYS * DAY_MS);
   const elapsed = (field: string) => ({ $cond: [{ $ne: [field, null] }, { $subtract: [field, "$createdAt"] }, null] });
   const rows = await db.vendorOrders
     .aggregate<{ _id: string; shippedCount: number; toShipMs: number | null; toDeliverMs: number | null }>([
-      { $match: { createdAt: { $gte: since }, shippedAt: { $ne: null } } },
+      { $match: { createdAt: { $gte: since }, shippedAt: { $ne: null }, ...vendorCondition(scope) } },
+      ...(scope.market
+        ? [
+            { $lookup: { from: "orders", localField: "orderId", foreignField: "_id", as: "order" } },
+            { $match: { "order.marketCountry": scope.market } },
+          ]
+        : []),
       {
         $group: {
           _id: "$vendorId",

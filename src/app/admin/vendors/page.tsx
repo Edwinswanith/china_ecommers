@@ -6,6 +6,7 @@ import { ConfirmAction } from "@/components/ui/confirm-action";
 import { setVendorStatusAction } from "@/lib/actions/admin";
 import { countryName } from "@/lib/config/markets";
 import { listVendorSales } from "@/lib/data/admin";
+import { getAdminScope } from "@/lib/data/admin-scope";
 import { formatMoney } from "@/lib/domain/money";
 import { formatDate } from "@/lib/format";
 
@@ -13,11 +14,13 @@ export const metadata: Metadata = { title: "Vendors" };
 
 export default async function AdminVendorsPage() {
   await requireAdmin();
-  const vendors = await listVendorSales();
+  const { scope, resolved } = await getAdminScope();
+  const vendors = await listVendorSales(resolved);
+  const salesNote = scope.customerCountry ? ` · sales to ${countryName(scope.customerCountry)} only` : "";
   const countries = new Set(vendors.map((v) => v.countryCode)).size;
   return (
     <>
-      <PageHeader eyebrow={`${vendors.length} vendors · ${countries} ${countries === 1 ? "country" : "countries"}`} title="Vendors" />
+      <PageHeader eyebrow={`${vendors.length} ${vendors.length === 1 ? "vendor" : "vendors"} · ${countries} ${countries === 1 ? "country" : "countries"}${salesNote}`} title="Vendors" />
       <div className="panel overflow-x-auto">
         <table className="data-table">
           <thead>

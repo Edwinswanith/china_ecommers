@@ -6,7 +6,9 @@ import { ProductImage } from "@/components/product-image";
 import { Badge } from "@/components/status-badge";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { setProductStatusAction } from "@/lib/actions/admin";
+import { countryName } from "@/lib/config/markets";
 import { listAllProducts } from "@/lib/data/admin";
+import { getAdminScope } from "@/lib/data/admin-scope";
 import { formatMoney } from "@/lib/domain/money";
 import { formatDate } from "@/lib/format";
 
@@ -14,11 +16,13 @@ export const metadata: Metadata = { title: "Products" };
 
 export default async function AdminProductsPage() {
   await requireAdmin();
-  const products = await listAllProducts();
+  const { scope, resolved } = await getAdminScope();
+  const products = await listAllProducts(resolved);
+  const from = scope.vendorCountry ? ` · from vendors in ${countryName(scope.vendorCountry)}` : "";
   const live = products.filter((p) => p.status === "active").length;
   return (
     <>
-      <PageHeader eyebrow={`${live} live · ${products.length} total`} title="Products" />
+      <PageHeader eyebrow={`${live} live · ${products.length} total${from}`} title="Products" />
       <div className="panel overflow-x-auto">
         <table className="data-table">
           <thead>

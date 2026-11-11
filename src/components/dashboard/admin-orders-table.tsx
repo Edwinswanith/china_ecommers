@@ -36,7 +36,10 @@ export function AdminOrdersTable({ rows }: { rows: Rows }) {
               </td>
               <td className="min-w-[9rem] max-w-[16rem] text-[13.5px]">{order.vendorOrders.map((v) => v.vendor.name).join(", ")}</td>
               <td className="num text-right">{order.items.reduce((sum, i) => sum + i.quantity, 0)}</td>
-              <td className="num text-right font-semibold">{formatMoney(order.totalMinor, order.currency)}</td>
+              <td className="num text-right font-semibold">
+                {formatMoney(order.scopedTotalMinor, order.currency)}
+                {order.partial ? <span className="block whitespace-nowrap text-[12px] font-normal text-subtle">of {formatMoney(order.totalMinor, order.currency)} order</span> : null}
+              </td>
               <td className="capitalize text-subtle">{order.paymentStatus}</td>
               <td><OrderStatusBadge status={rollupOrderStatus(order.vendorOrders.map((v) => v.status))} /></td>
               <td className="text-right"><Link href={`/admin/orders/${order.id}`} className="btn btn-ghost btn-sm">Open</Link></td>
