@@ -27,7 +27,7 @@ export function VendorOrdersTable({ rows, emptyText }: { rows: Rows; emptyText: 
             <tr key={row.id} className={row.status === "new" ? "row-flash" : undefined}>
               <td className="num whitespace-nowrap font-semibold">{row.order.number}</td>
               <td className="whitespace-nowrap text-subtle">{formatDate(row.order.createdAt)}</td>
-              <td className="max-w-xs">{row.items.map((i) => `${i.name} × ${i.quantity}`).join(", ")}</td>
+              <td className="min-w-[14rem] max-w-xs">{row.items.map((i) => `${i.name} × ${i.quantity}`).join(", ")}</td>
               <td className="whitespace-nowrap">{row.order.shippingAddress.city}, {row.order.shippingAddress.state}</td>
               <td className="num text-right">{formatMoney(row.subtotalMinor, row.order.currency)}</td>
               <td><FulfillmentBadge status={row.status} /></td>

@@ -16,7 +16,7 @@ interface AddToCartProps {
 
 const CONFIRM_MS = 1800;
 /** Height of the header that stays at the top on phones; the main button is out of sight once it is under it. */
-const STICKY_HEADER_PX = 120;
+const STICKY_HEADER_PX = 160;
 
 export function AddToCart({ productId, stock, name, priceLabel }: AddToCartProps) {
   const [quantity, setQuantity] = useState(1);

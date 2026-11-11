@@ -38,7 +38,7 @@ export default async function AdminVendorsPage() {
               const suspended = vendor.status === "suspended";
               return (
                 <tr key={vendor.id}>
-                  <td>
+                  <td className="min-w-[13rem]">
                     <span className="font-medium">{vendor.name}</span>
                     <span className="block text-[12.5px] text-subtle">{vendor.contactEmail}</span>
                   </td>

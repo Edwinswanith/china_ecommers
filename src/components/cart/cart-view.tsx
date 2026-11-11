@@ -99,7 +99,7 @@ export function CartView() {
         })}
       </ul>
 
-      <aside className="h-fit rounded-2xl border border-line bg-white p-6 shadow-[var(--shadow-card)] lg:sticky lg:top-44" aria-label="Order summary">
+      <aside className="h-fit rounded-2xl border border-line bg-white p-6 shadow-[var(--shadow-card)] lg:sticky lg:top-32 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto" aria-label="Order summary">
         <h2 className="text-[18px] font-bold tracking-tight">Order summary</h2>
         <dl className="mt-5 space-y-3 text-[15px]">
           <div className="flex justify-between"><dt className="text-subtle">Items ({units})</dt><dd className="num font-medium"><AnimatedNumber value={data.subtotalMinor} format="money" currency={data.currency} /></dd></div>

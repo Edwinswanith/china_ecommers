@@ -32,7 +32,8 @@ export async function SiteHeader() {
   const AccountIcon = account.icon;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
+    <>
+      {/* The announcement strip scrolls away with the page, so the part that stays pinned is as short as possible on small screens. */}
       <div className="hidden bg-fg text-white sm:block">
         <div className="shell flex h-9 items-center justify-between text-[13px]">
           <p className="flex items-center gap-2 text-white/85">
@@ -41,6 +42,8 @@ export async function SiteHeader() {
           <Link href="/sell" className="font-medium text-white/85 transition-colors hover:text-white">Sell on {BRAND.shortName}</Link>
         </div>
       </div>
+
+    <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
 
       <div className="shell flex h-16 items-center gap-4 md:gap-8">
         <Wordmark />
@@ -92,5 +95,6 @@ export async function SiteHeader() {
         </div>
       </nav>
     </header>
+    </>
   );
 }

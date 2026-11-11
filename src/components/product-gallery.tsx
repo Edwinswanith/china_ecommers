@@ -51,8 +51,9 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
     ? { transform: `scale(${ZOOM_SCALE})`, transformOrigin: `${zoom.x}% ${zoom.y}%` }
     : { transform: "scale(1)", transformOrigin: "center" };
 
+  // Capped on tablets so the name and price stay near the top, and on short laptop screens so the whole photo fits.
   return (
-    <div className="lg:sticky lg:top-44 lg:self-start">
+    <div className="mx-auto w-full max-w-[34rem] lg:sticky lg:top-32 lg:mx-0 lg:max-w-[max(20rem,calc(100vh-16rem))] lg:self-start">
       <div className="group relative">
         <div
           className={`relative aspect-square touch-pan-y select-none overflow-hidden rounded-3xl border border-line bg-muted ${zoom ? "cursor-zoom-in" : ""}`}

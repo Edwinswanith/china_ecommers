@@ -30,11 +30,11 @@ export function AdminOrdersTable({ rows }: { rows: Rows }) {
             <tr key={order.id}>
               <td className="num whitespace-nowrap font-semibold">{order.number}</td>
               <td className="whitespace-nowrap text-subtle">{formatDate(order.createdAt)}</td>
-              <td>
+              <td className="min-w-[8rem]">
                 {order.customer.name}
                 <span className="block text-[12.5px] text-subtle">{order.shippingAddress.city}</span>
               </td>
-              <td className="max-w-[16rem] text-[13.5px]">{order.vendorOrders.map((v) => v.vendor.name).join(", ")}</td>
+              <td className="min-w-[9rem] max-w-[16rem] text-[13.5px]">{order.vendorOrders.map((v) => v.vendor.name).join(", ")}</td>
               <td className="num text-right">{order.items.reduce((sum, i) => sum + i.quantity, 0)}</td>
               <td className="num text-right font-semibold">{formatMoney(order.totalMinor, order.currency)}</td>
               <td className="capitalize text-subtle">{order.paymentStatus}</td>

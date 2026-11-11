@@ -17,7 +17,7 @@ interface DashboardShellProps {
 export function DashboardShell({ area, subtitle, userName, nav, children }: DashboardShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-muted lg:flex-row">
-      <aside className="flex shrink-0 flex-col border-b border-line bg-white lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:border-b-0 lg:border-r">
+      <aside className="flex shrink-0 flex-col border-b border-line bg-white lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between gap-4 px-5 py-4 lg:block lg:py-5">
           <Wordmark />
           <div className="text-right lg:mt-5 lg:rounded-xl lg:bg-muted lg:p-3 lg:text-left">

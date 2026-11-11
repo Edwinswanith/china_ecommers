@@ -79,6 +79,10 @@ body {
   @media (min-width: 768px) {
     .shell { padding-inline: 32px; }
   }
+  /* Give large monitors a little more room without letting lines of text run too long. */
+  @media (min-width: 1800px) {
+    .shell { max-width: 1400px; }
+  }
 
   /* Small supporting text: eyebrows, captions, table metadata. */
   .label {
@@ -191,7 +195,11 @@ body {
   .prose-copy h2 { margin-top: 1.8em; margin-bottom: 0.4em; font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em; }
   .prose-copy p { color: var(--color-subtle); }
 
-  .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  /*
+   * "position: relative" keeps the table's screen-reader-only labels inside the table. Without it they
+   * sit outside the scrolling wrapper and make the whole page scroll sideways on narrower screens.
+   */
+  .data-table { position: relative; width: 100%; border-collapse: collapse; font-size: 14px; }
   .data-table th {
     padding: 11px 16px;
     text-align: left;
@@ -209,6 +217,18 @@ body {
 
   /* Numbers that should line up in columns. */
   .num { font-variant-numeric: tabular-nums; }
+}
+
+/*
+ * Laptop-height screens (1366x768, or a larger display at 125-150% scaling) show far less
+ * of the page than a tall monitor. Tighten the home page hero so the main button is visible
+ * without scrolling.
+ */
+@media (max-height: 760px) and (min-width: 768px) {
+  .hero-inner { padding-block: 2rem; }
+  .hero-title { font-size: 2.6rem; }
+  .hero-actions { margin-top: 1.5rem; }
+  .hero-card { max-width: 21rem; }
 }
 
 /* ---------- Micro-interactions ---------- */

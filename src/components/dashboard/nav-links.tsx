@@ -20,7 +20,7 @@ export interface NavItem {
 export function NavLinks({ items }: { items: readonly NavItem[] }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Section" className="flex gap-1 overflow-x-auto px-3 py-2 lg:flex-col lg:py-4">
+    <nav aria-label="Section" className="flex gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] lg:flex-col lg:py-4">
       {items.map((item) => {
         const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
         const Icon = ICONS[item.icon];

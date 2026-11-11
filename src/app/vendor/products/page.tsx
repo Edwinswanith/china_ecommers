@@ -44,7 +44,7 @@ export default async function VendorProductsPage({ searchParams }: PageProps) {
             <tbody>
               {products.map((product) => (
                 <tr key={product.id}>
-                  <td>
+                  <td className="min-w-[15rem]">
                     <div className="flex items-center gap-3">
                       <div className="w-11 shrink-0 overflow-hidden rounded-lg"><ProductImage src={product.images[0]} alt="" sizes="44px" /></div>
                       <span className="font-medium">{product.name}</span>

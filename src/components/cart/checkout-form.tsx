@@ -104,7 +104,7 @@ export function CheckoutForm({ defaultName, paymentsLive }: CheckoutFormProps) {
         </section>
       </div>
 
-      <aside className="h-fit rounded-2xl border border-line bg-white p-6 shadow-[var(--shadow-card)] lg:sticky lg:top-44" aria-label="Order summary">
+      <aside className="h-fit rounded-2xl border border-line bg-white p-6 shadow-[var(--shadow-card)] lg:sticky lg:top-32 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto" aria-label="Order summary">
         <h2 className="text-[18px] font-bold tracking-tight">Order summary</h2>
         <div className="mt-5 space-y-5">
           {groups.map((group, index) => (

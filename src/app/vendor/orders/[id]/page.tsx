@@ -37,7 +37,7 @@ export default async function VendorOrderPage({ params }: PageProps) {
         <PageHeader eyebrow={`Placed ${formatDateTime(shipment.order.createdAt)}`} title={`Order ${shipment.order.number}`} action={<ChangeFlash watch={shipment.status}><FulfillmentBadge status={shipment.status} /></ChangeFlash>} />
       </div>
       {shipment.status === "cancelled" ? null : (
-        <div className="panel mb-6 px-3 py-5 sm:px-5">
+        <div className="panel mb-6 px-1 py-5 min-[380px]:px-3 sm:px-5">
           <ShipmentProgress status={shipment.status} />
         </div>
       )}
@@ -47,11 +47,14 @@ export default async function VendorOrderPage({ params }: PageProps) {
             <h2 id="items-heading" className="border-b border-line px-5 py-3.5 text-[15px] font-semibold">Items to pack · {units} {units === 1 ? "unit" : "units"}</h2>
             <ul className="divide-y divide-line px-5">
               {shipment.items.map((item) => (
-                <li key={item.id} className="flex items-center gap-4 py-4">
+                <li key={item.id} className="flex items-center gap-3 py-4 sm:gap-4">
                   <div className="w-14 shrink-0 overflow-hidden rounded-lg"><ProductImage src={item.image} alt="" sizes="56px" /></div>
-                  <p className="flex-1 font-medium">{item.name}</p>
-                  <p className="num rounded-lg bg-muted px-2.5 py-1 text-[14px] font-bold">Qty {item.quantity}</p>
-                  <p className="num w-24 text-right">{formatMoney(item.unitPriceMinor * item.quantity, shipment.order.currency)}</p>
+                  <p className="min-w-0 flex-1 font-medium">{item.name}</p>
+                  {/* Quantity and price sit side by side, and stack on narrow phones so the row never runs off the screen. */}
+                  <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-4">
+                    <p className="num whitespace-nowrap rounded-lg bg-muted px-2.5 py-1 text-[14px] font-bold">Qty {item.quantity}</p>
+                    <p className="num text-right sm:w-24">{formatMoney(item.unitPriceMinor * item.quantity, shipment.order.currency)}</p>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -36,7 +36,7 @@ export default async function AdminProductsPage() {
           <tbody>
             {products.map((product) => (
               <tr key={product.id}>
-                <td>
+                <td className="min-w-[15rem]">
                   <div className="flex items-center gap-3">
                     <div className="w-11 shrink-0 overflow-hidden rounded-lg"><ProductImage src={product.image} alt="" sizes="44px" /></div>
                     {product.status === "active" ? (

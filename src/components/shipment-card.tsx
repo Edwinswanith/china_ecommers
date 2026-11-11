@@ -42,7 +42,7 @@ export function ShipmentCard({ index, total, currency, shipment }: ShipmentCardP
       {cancelled ? (
         <p className="border-b border-line bg-muted px-5 py-3 text-[14px] text-subtle">This delivery was cancelled.</p>
       ) : (
-        <ShipmentProgress status={shipment.status} className="border-b border-line px-3 py-5 sm:px-5" />
+        <ShipmentProgress status={shipment.status} className="border-b border-line px-1 py-5 min-[380px]:px-3 sm:px-5" />
       )}
 
       <ul className="divide-y divide-line px-5">

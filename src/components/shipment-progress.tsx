@@ -41,7 +41,7 @@ export function ShipmentProgress({ status, className = "" }: { status: Fulfillme
             >
               <Icon size={17} aria-hidden="true" />
             </span>
-            <span className={`mt-2 text-[12px] font-medium sm:text-[13px] ${done ? "text-fg" : "text-subtle"}`}>{label}</span>
+            <span className={`mt-2 text-[10.5px] font-medium min-[380px]:text-[12px] sm:text-[13px] ${done ? "text-fg" : "text-subtle"}`}>{label}</span>
           </li>
         );
       })}

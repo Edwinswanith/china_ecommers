@@ -53,7 +53,7 @@ export default async function HomePage() {
       <JsonLd data={[organizationLd(), websiteLd(), faqLd(STORE_FAQS), itemListLd("Popular products", grid)]} />
 
       <section className="bg-gradient-to-b from-brand-soft to-white">
-        <div className="shell grid items-center gap-10 py-12 md:py-16 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
+        <div className="shell grid items-center gap-10 hero-inner py-12 md:py-16 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
           <div>
             <p className="animate-rise inline-flex items-center gap-2 rounded-full border border-brand/20 bg-white px-3.5 py-1.5 text-[13.5px] font-medium text-brand-dark shadow-sm">
               <span className="relative flex h-2 w-2" aria-hidden="true">
@@ -62,13 +62,13 @@ export default async function HomePage() {
               </span>
               New arrivals every week
             </p>
-            <h1 className="display animate-rise mt-5 text-[2.5rem] leading-[1.08] [animation-delay:60ms] md:text-[3.5rem]">
+            <h1 className="display animate-rise mt-5 text-[2.5rem] leading-[1.08] [animation-delay:60ms] hero-title md:text-[3.5rem]">
               Clever gadgets you didn’t know you needed.
             </h1>
             <p className="animate-rise mt-5 max-w-lg text-[17.5px] leading-relaxed text-subtle [animation-delay:120ms]">
               {BRAND.shortName} brings you a hand-picked range of inventive electronics, sold by the people who make them and delivered to your door anywhere in India.
             </p>
-            <div className="animate-rise mt-8 flex flex-wrap gap-3 [animation-delay:180ms]">
+            <div className="hero-actions animate-rise mt-8 flex flex-wrap gap-3 [animation-delay:180ms]">
               <Link href="/products" className="btn btn-primary btn-lg">Shop all products <ArrowRight size={18} aria-hidden="true" /></Link>
               <Link href="#how-it-works" className="btn btn-ghost btn-lg">How it works</Link>
             </div>
@@ -82,7 +82,7 @@ export default async function HomePage() {
           {featured ? (
             <Link
               href={`/products/${featured.slug}`}
-              className="lift animate-rise group mx-auto block w-full max-w-md overflow-hidden rounded-3xl border border-line bg-white shadow-[var(--shadow-lift)] [animation-delay:150ms]"
+              className="lift animate-rise group mx-auto block w-full hero-card max-w-md overflow-hidden rounded-3xl border border-line bg-white shadow-[var(--shadow-lift)] [animation-delay:150ms]"
               aria-label={`Featured: ${featured.name}`}
             >
               <div className="relative overflow-hidden">
@@ -162,7 +162,7 @@ export default async function HomePage() {
         )}
       </section>
 
-      <section id="how-it-works" className="mt-16 scroll-mt-40 bg-muted" aria-labelledby="how-heading">
+      <section id="how-it-works" className="mt-16 scroll-mt-32 bg-muted" aria-labelledby="how-heading">
         <div className="shell py-14 md:py-16">
           <div className="mx-auto max-w-2xl text-center">
             <h2 id="how-heading" className="display text-2xl md:text-[1.9rem]">How it works</h2>
