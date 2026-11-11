@@ -1,11 +1,9 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/client";
-import { products, vendors } from "@/lib/db/schema";
 
 const vendorStatusInput = z.object({ vendorId: z.uuid(), status: z.enum(["active", "suspended"]) });
 const productStatusInput = z.object({ productId: z.uuid(), status: z.enum(["active", "archived"]) });
@@ -16,7 +14,7 @@ export async function setVendorStatusAction(formData: FormData): Promise<void> {
   const parsed = vendorStatusInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const db = await getDb();
-  await db.update(vendors).set({ status: parsed.data.status }).where(eq(vendors.id, parsed.data.vendorId));
+  await db.vendors.updateOne({ _id: parsed.data.vendorId }, { $set: { status: parsed.data.status } });
   revalidatePath("/", "layout");
 }
 
@@ -26,6 +24,6 @@ export async function setProductStatusAction(formData: FormData): Promise<void> 
   const parsed = productStatusInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const db = await getDb();
-  await db.update(products).set({ status: parsed.data.status, updatedAt: new Date() }).where(eq(products.id, parsed.data.productId));
+  await db.products.updateOne({ _id: parsed.data.productId }, { $set: { status: parsed.data.status, updatedAt: new Date() } });
   revalidatePath("/", "layout");
 }

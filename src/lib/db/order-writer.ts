@@ -1,8 +1,7 @@
 import { randomInt } from "node:crypto";
-import { and, eq, gte, sql } from "drizzle-orm";
 import type { OrderDraft } from "@/lib/domain/cart";
-import type { Db } from "./client";
-import { fulfillmentEvents, orderItems, orders, products, vendorOrders, type ShippingAddress } from "./schema";
+import { newId, withTransaction, type Db } from "./client";
+import type { ShippingAddress } from "./schema";
 
 export interface PaymentResult {
   readonly provider: string;
@@ -41,16 +40,20 @@ function generateOrderNumber(): string {
 /**
  * Persist an order atomically: the order, one vendor order per shipment,
  * the line items, the first timeline event, and the stock decrement.
- * Stock is decremented with a guarded UPDATE so two buyers cannot both
+ * Stock is decremented with a guarded update so two buyers cannot both
  * take the last unit.
  */
 export async function insertOrder(db: Db, input: NewOrderInput): Promise<CreatedOrder> {
   const { draft } = input;
-  return db.transaction(async (tx) => {
-    const [order] = await tx
-      .insert(orders)
-      .values({
-        number: generateOrderNumber(),
+  return withTransaction(db, async (tx) => {
+    const session = tx;
+    const now = new Date();
+    const orderId = newId();
+    const number = generateOrderNumber();
+    await db.orders.insertOne(
+      {
+        _id: orderId,
+        number,
         customerId: input.customerId,
         marketCountry: input.marketCountry,
         currency: draft.currency,
@@ -62,39 +65,61 @@ export async function insertOrder(db: Db, input: NewOrderInput): Promise<Created
         paymentProvider: input.payment.provider,
         paymentRef: input.payment.reference,
         shippingAddress: input.shippingAddress,
-      })
-      .returning({ id: orders.id, number: orders.number });
+        createdAt: now,
+      },
+      { session },
+    );
 
     const vendorOrderIds: string[] = [];
     for (const shipment of draft.shipments) {
-      const [vendorOrder] = await tx
-        .insert(vendorOrders)
-        .values({ orderId: order.id, vendorId: shipment.vendorId, subtotalMinor: shipment.subtotalMinor })
-        .returning({ id: vendorOrders.id });
-      vendorOrderIds.push(vendorOrder.id);
-
-      await tx.insert(fulfillmentEvents).values({ vendorOrderId: vendorOrder.id, status: "new", note: "Order placed" });
-      await tx.insert(orderItems).values(
+      const vendorOrderId = newId();
+      vendorOrderIds.push(vendorOrderId);
+      await db.vendorOrders.insertOne(
+        {
+          _id: vendorOrderId,
+          orderId,
+          vendorId: shipment.vendorId,
+          status: "new",
+          subtotalMinor: shipment.subtotalMinor,
+          packageCount: null,
+          weightGrams: null,
+          lengthCm: null,
+          widthCm: null,
+          heightCm: null,
+          carrier: null,
+          trackingNumber: null,
+          vendorNote: null,
+          createdAt: now,
+          updatedAt: now,
+          shippedAt: null,
+          deliveredAt: null,
+        },
+        { session },
+      );
+      await db.fulfillmentEvents.insertOne({ _id: newId(), vendorOrderId, status: "new", note: "Order placed", createdAt: now }, { session });
+      await db.orderItems.insertMany(
         shipment.items.map((item) => ({
-          orderId: order.id,
-          vendorOrderId: vendorOrder.id,
+          _id: newId(),
+          orderId,
+          vendorOrderId,
           productId: item.productId,
           name: item.name,
           image: item.image,
           unitPriceMinor: item.unitPriceMinor,
           quantity: item.quantity,
         })),
+        { session },
       );
 
       for (const item of shipment.items) {
-        const updated = await tx
-          .update(products)
-          .set({ stock: sql`${products.stock} - ${item.quantity}` })
-          .where(and(eq(products.id, item.productId), gte(products.stock, item.quantity)))
-          .returning({ id: products.id });
-        if (updated.length === 0) throw new OutOfStockError(item.name);
+        const updated = await db.products.updateOne(
+          { _id: item.productId, stock: { $gte: item.quantity } },
+          { $inc: { stock: -item.quantity } },
+          { session },
+        );
+        if (updated.matchedCount === 0) throw new OutOfStockError(item.name);
       }
     }
-    return { id: order.id, number: order.number, vendorOrderIds };
+    return { id: orderId, number, vendorOrderIds };
   });
 }

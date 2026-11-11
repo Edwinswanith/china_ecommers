@@ -1,7 +1,7 @@
 import "server-only";
-import { desc, eq, sql } from "drizzle-orm";
-import { getDb } from "@/lib/db/client";
-import { categories, orders, products, users, vendorOrders, vendors, type FulfillmentStatus } from "@/lib/db/schema";
+import { byId, fromDoc, getDb } from "@/lib/db/client";
+import type { FulfillmentEvent, FulfillmentStatus, Order, OrderItem, ProductStatus, VendorOrder } from "@/lib/db/schema";
+import { groupBy } from "./group";
 
 export interface AdminOverview {
   readonly grossSalesMinor: number;
@@ -17,31 +17,34 @@ const EMPTY_COUNTS: Record<FulfillmentStatus, number> = { new: 0, accepted: 0, p
 
 export async function getAdminOverview(): Promise<AdminOverview> {
   const db = await getDb();
-  const [[sales], [people], [catalog], shipmentRows] = await Promise.all([
-    db
-      .select({
-        total: sql<number>`coalesce(sum(${orders.totalMinor}) filter (where ${orders.paymentStatus} = 'paid'), 0)::float8`,
-        count: sql<number>`count(*)::int`,
-        paid: sql<number>`count(*) filter (where ${orders.paymentStatus} = 'paid')::int`,
-      })
-      .from(orders),
-    db
-      .select({
-        customers: sql<number>`count(*) filter (where ${users.role} = 'customer')::int`,
-        vendors: sql<number>`(select count(*)::int from ${vendors})`,
-      })
-      .from(users),
-    db.select({ count: sql<number>`count(*) filter (where ${products.status} = 'active')::int` }).from(products),
-    db.select({ status: vendorOrders.status, count: sql<number>`count(*)::int` }).from(vendorOrders).groupBy(vendorOrders.status),
+  const paid = { $eq: ["$paymentStatus", "paid"] };
+  const [salesRows, customerCount, vendorCount, productCount, shipmentRows] = await Promise.all([
+    db.orders
+      .aggregate<{ total: number; count: number; paid: number }>([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $cond: [paid, "$totalMinor", 0] } },
+            count: { $sum: 1 },
+            paid: { $sum: { $cond: [paid, 1, 0] } },
+          },
+        },
+      ])
+      .toArray(),
+    db.users.countDocuments({ role: "customer" }),
+    db.vendors.countDocuments(),
+    db.products.countDocuments({ status: "active" }),
+    db.vendorOrders.aggregate<{ _id: FulfillmentStatus; count: number }>([{ $group: { _id: "$status", count: { $sum: 1 } } }]).toArray(),
   ]);
+  const sales = salesRows[0] ?? { total: 0, count: 0, paid: 0 };
   return {
     grossSalesMinor: sales.total,
     orderCount: sales.count,
     averageOrderMinor: sales.paid > 0 ? Math.round(sales.total / sales.paid) : 0,
-    customerCount: people.customers,
-    vendorCount: people.vendors,
-    productCount: catalog.count,
-    shipments: shipmentRows.reduce((acc, row) => ({ ...acc, [row.status]: row.count }), EMPTY_COUNTS),
+    customerCount,
+    vendorCount,
+    productCount,
+    shipments: shipmentRows.reduce((acc, row) => ({ ...acc, [row._id]: row.count }), EMPTY_COUNTS),
   };
 }
 
@@ -61,26 +64,58 @@ export interface VendorSalesRow {
   readonly productCount: number;
 }
 
+interface VendorShipmentTotals {
+  readonly _id: string;
+  readonly revenueMinor: number;
+  readonly shipmentCount: number;
+  readonly pendingCount: number;
+  readonly deliveredCount: number;
+}
+
 /** Sales and fulfilment health per vendor, highest revenue first. */
 export async function listVendorSales(): Promise<VendorSalesRow[]> {
   const db = await getDb();
-  const rows = await db
-    .select({
-      id: vendors.id,
-      name: vendors.name,
-      slug: vendors.slug,
-      countryCode: vendors.countryCode,
-      city: vendors.city,
-      status: vendors.status,
-      contactEmail: vendors.contactEmail,
-      createdAt: vendors.createdAt,
-      revenueMinor: sql<number>`coalesce((select sum(vo.subtotal_minor) from vendor_orders vo join orders o on o.id = vo.order_id where vo.vendor_id = "vendors"."id" and vo.status <> 'cancelled' and o.payment_status = 'paid'), 0)::float8`,
-      shipmentCount: sql<number>`(select count(*) from vendor_orders vo where vo.vendor_id = "vendors"."id")::int`,
-      pendingCount: sql<number>`(select count(*) from vendor_orders vo where vo.vendor_id = "vendors"."id" and vo.status in ('new','accepted','packed'))::int`,
-      deliveredCount: sql<number>`(select count(*) from vendor_orders vo where vo.vendor_id = "vendors"."id" and vo.status = 'delivered')::int`,
-      productCount: sql<number>`(select count(*) from products p where p.vendor_id = "vendors"."id" and p.status = 'active')::int`,
-    })
-    .from(vendors);
+  const countIf = (condition: unknown) => ({ $sum: { $cond: [condition, 1, 0] } });
+  const [vendorDocs, shipmentTotals, productTotals] = await Promise.all([
+    db.vendors.find().toArray(),
+    db.vendorOrders
+      .aggregate<VendorShipmentTotals>([
+        { $lookup: { from: "orders", localField: "orderId", foreignField: "_id", as: "order" } },
+        { $set: { paid: { $in: ["paid", "$order.paymentStatus"] } } },
+        {
+          $group: {
+            _id: "$vendorId",
+            // Revenue counts shipments that were not cancelled, on orders that were paid.
+            revenueMinor: { $sum: { $cond: [{ $and: ["$paid", { $ne: ["$status", "cancelled"] }] }, "$subtotalMinor", 0] } },
+            shipmentCount: { $sum: 1 },
+            pendingCount: countIf({ $in: ["$status", ["new", "accepted", "packed"]] }),
+            deliveredCount: countIf({ $eq: ["$status", "delivered"] }),
+          },
+        },
+      ])
+      .toArray(),
+    db.products.aggregate<{ _id: string; count: number }>([{ $match: { status: "active" } }, { $group: { _id: "$vendorId", count: { $sum: 1 } } }]).toArray(),
+  ]);
+  const shipments = new Map(shipmentTotals.map((row) => [row._id, row]));
+  const products = new Map(productTotals.map((row) => [row._id, row.count]));
+  const rows = vendorDocs.map((vendor): VendorSalesRow => {
+    const totals = shipments.get(vendor._id);
+    return {
+      id: vendor._id,
+      name: vendor.name,
+      slug: vendor.slug,
+      countryCode: vendor.countryCode,
+      city: vendor.city,
+      status: vendor.status,
+      contactEmail: vendor.contactEmail,
+      createdAt: vendor.createdAt,
+      revenueMinor: totals?.revenueMinor ?? 0,
+      shipmentCount: totals?.shipmentCount ?? 0,
+      pendingCount: totals?.pendingCount ?? 0,
+      deliveredCount: totals?.deliveredCount ?? 0,
+      productCount: products.get(vendor._id) ?? 0,
+    };
+  });
   return [...rows].sort((a, b) => b.revenueMinor - a.revenueMinor);
 }
 
@@ -103,50 +138,91 @@ export function salesByCountry(rows: readonly VendorSalesRow[]): CountrySalesRow
   return [...byCountry.values()].sort((a, b) => b.revenueMinor - a.revenueMinor);
 }
 
+const UNKNOWN_CUSTOMER = { name: "Deleted account", email: "" } as const;
+
 export async function listAllOrders(limit = 200) {
   const db = await getDb();
-  return db.query.orders.findMany({
-    orderBy: desc(orders.createdAt),
-    limit,
-    with: {
-      customer: { columns: { name: true, email: true } },
-      vendorOrders: { with: { vendor: { columns: { name: true } } } },
-      items: { columns: { quantity: true } },
-    },
+  const orders = (await db.orders.find().sort({ createdAt: -1 }).limit(limit).toArray()).map((doc) => fromDoc<Order>(doc));
+  const orderIds = orders.map((o) => o.id);
+  const [customers, shipmentDocs, itemDocs] = await Promise.all([
+    byId(db.users, orders.map((o) => o.customerId)),
+    db.vendorOrders.find({ orderId: { $in: orderIds } }).sort({ createdAt: 1, _id: 1 }).toArray(),
+    db.orderItems.find({ orderId: { $in: orderIds } }, { projection: { orderId: 1, quantity: 1 } }).toArray(),
+  ]);
+  const vendors = await byId(db.vendors, shipmentDocs.map((s) => s.vendorId));
+  const shipments = groupBy(shipmentDocs.map((doc) => fromDoc<VendorOrder>(doc)), (s) => s.orderId);
+  const items = groupBy(itemDocs, (i) => i.orderId);
+  return orders.map((order) => {
+    const customer = customers.get(order.customerId);
+    return {
+      ...order,
+      customer: customer ? { name: customer.name, email: customer.email } : UNKNOWN_CUSTOMER,
+      vendorOrders: (shipments.get(order.id) ?? []).map((s) => ({ ...s, vendor: { name: vendors.get(s.vendorId)?.name ?? "Vendor" } })),
+      items: (items.get(order.id) ?? []).map((i) => ({ quantity: i.quantity })),
+    };
   });
 }
 
 export async function getOrderForAdmin(orderId: string) {
   const db = await getDb();
-  const order = await db.query.orders.findFirst({
-    where: eq(orders.id, orderId),
-    with: {
-      customer: { columns: { name: true, email: true } },
-      vendorOrders: { with: { vendor: { columns: { name: true, countryCode: true, city: true } }, items: true, events: true } },
-    },
-  });
-  return order ?? null;
+  const orderDoc = await db.orders.findOne({ _id: orderId });
+  if (!orderDoc) return null;
+  const shipments = (await db.vendorOrders.find({ orderId }).sort({ createdAt: 1, _id: 1 }).toArray()).map((doc) => fromDoc<VendorOrder>(doc));
+  const [customer, vendors, itemDocs, eventDocs] = await Promise.all([
+    db.users.findOne({ _id: orderDoc.customerId }),
+    byId(db.vendors, shipments.map((s) => s.vendorId)),
+    db.orderItems.find({ orderId }).toArray(),
+    db.fulfillmentEvents.find({ vendorOrderId: { $in: shipments.map((s) => s.id) } }).sort({ createdAt: 1 }).toArray(),
+  ]);
+  const items = groupBy(itemDocs.map((doc) => fromDoc<OrderItem>(doc)), (i) => i.vendorOrderId);
+  const events = groupBy(eventDocs.map((doc) => fromDoc<FulfillmentEvent>(doc)), (e) => e.vendorOrderId);
+  return {
+    ...fromDoc<Order>(orderDoc),
+    customer: customer ? { name: customer.name, email: customer.email } : UNKNOWN_CUSTOMER,
+    vendorOrders: shipments.map((shipment) => {
+      const vendor = vendors.get(shipment.vendorId);
+      return {
+        ...shipment,
+        vendor: { name: vendor?.name ?? "Vendor", countryCode: vendor?.countryCode ?? "", city: vendor?.city ?? "" },
+        items: items.get(shipment.id) ?? [],
+        events: events.get(shipment.id) ?? [],
+      };
+    }),
+  };
 }
 
-export async function listAllProducts() {
+export interface AdminProductRow {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly image: string | null;
+  readonly priceMinor: number;
+  readonly currency: string;
+  readonly stock: number;
+  readonly status: ProductStatus;
+  readonly createdAt: Date;
+  readonly vendorName: string;
+  readonly categoryName: string;
+}
+
+export async function listAllProducts(): Promise<AdminProductRow[]> {
   const db = await getDb();
-  return db
-    .select({
-      id: products.id,
-      slug: products.slug,
-      name: products.name,
-      image: sql<string | null>`${products.images} ->> 0`,
-      priceMinor: products.priceMinor,
-      currency: products.currency,
-      stock: products.stock,
-      status: products.status,
-      createdAt: products.createdAt,
-      vendorName: vendors.name,
-      categoryName: categories.name,
-    })
-    .from(products)
-    .innerJoin(vendors, eq(products.vendorId, vendors.id))
-    .innerJoin(categories, eq(products.categoryId, categories.id))
-    .orderBy(desc(products.createdAt))
-    .limit(500);
+  const docs = await db.products.find().sort({ createdAt: -1, _id: 1 }).limit(500).toArray();
+  const [vendors, categories] = await Promise.all([
+    byId(db.vendors, docs.map((p) => p.vendorId)),
+    byId(db.categories, docs.map((p) => p.categoryId)),
+  ]);
+  return docs.map((p) => ({
+    id: p._id,
+    slug: p.slug,
+    name: p.name,
+    image: p.images[0] ?? null,
+    priceMinor: p.priceMinor,
+    currency: p.currency,
+    stock: p.stock,
+    status: p.status,
+    createdAt: p.createdAt,
+    vendorName: vendors.get(p.vendorId)?.name ?? "Vendor",
+    categoryName: categories.get(p.categoryId)?.name ?? "",
+  }));
 }

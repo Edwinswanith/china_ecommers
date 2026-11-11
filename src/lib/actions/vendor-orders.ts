@@ -1,10 +1,8 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireVendor } from "@/lib/auth/guards";
-import { getDb } from "@/lib/db/client";
-import { fulfillmentEvents, orderItems, products, vendorOrders } from "@/lib/db/schema";
+import { getDb, newId, withTransaction } from "@/lib/db/client";
 import { canTransition, FULFILLMENT_LABELS, validateShipReadiness, type PackageDetails } from "@/lib/domain/fulfillment";
 import { zodFormState, type FormState } from "@/lib/form-state";
 import { packageSchema, shipmentUpdateSchema } from "@/lib/validation/schemas";
@@ -28,11 +26,7 @@ export async function updateShipmentAction(_prev: FormState, formData: FormData)
   const { vendorOrderId, intent, carrier, trackingNumber, vendorNote } = parsed.data;
 
   const db = await getDb();
-  const [current] = await db
-    .select()
-    .from(vendorOrders)
-    .where(and(eq(vendorOrders.id, vendorOrderId), eq(vendorOrders.vendorId, vendor.id)))
-    .limit(1);
+  const current = await db.vendorOrders.findOne({ _id: vendorOrderId, vendorId: vendor.id });
   if (!current) return { ok: false, message: "Shipment not found." };
 
   const editable = current.status === "new" || current.status === "accepted" || current.status === "packed";
@@ -54,38 +48,41 @@ export async function updateShipmentAction(_prev: FormState, formData: FormData)
 
   const now = new Date();
   const nextStatus = intent === "save" ? current.status : intent;
-  const applied = await db.transaction(async (tx) => {
-    const updated = await tx
-      .update(vendorOrders)
-      .set({
-        status: nextStatus,
-        packageCount: pkg.packageCount,
-        weightGrams: pkg.weightGrams,
-        lengthCm: pkg.lengthCm,
-        widthCm: pkg.widthCm,
-        heightCm: pkg.heightCm,
-        carrier: carrier || current.carrier,
-        trackingNumber: trackingNumber || current.trackingNumber,
-        vendorNote: vendorNote || current.vendorNote,
-        updatedAt: now,
-        shippedAt: intent === "shipped" ? now : current.shippedAt,
-        deliveredAt: intent === "delivered" ? now : current.deliveredAt,
-      })
-      .where(and(eq(vendorOrders.id, vendorOrderId), eq(vendorOrders.status, current.status)))
-      .returning({ id: vendorOrders.id });
-    // Zero rows means another request changed the status first; record nothing.
-    if (updated.length === 0) return false;
+  const applied = await withTransaction(db, async (tx) => {
+    const updated = await db.vendorOrders.updateOne(
+      // Matching on the status we read means a competing update makes this one a no-op.
+      { _id: vendorOrderId, status: current.status },
+      {
+        $set: {
+          status: nextStatus,
+          packageCount: pkg.packageCount,
+          weightGrams: pkg.weightGrams,
+          lengthCm: pkg.lengthCm,
+          widthCm: pkg.widthCm,
+          heightCm: pkg.heightCm,
+          carrier: carrier || current.carrier,
+          trackingNumber: trackingNumber || current.trackingNumber,
+          vendorNote: vendorNote || current.vendorNote,
+          updatedAt: now,
+          shippedAt: intent === "shipped" ? now : current.shippedAt,
+          deliveredAt: intent === "delivered" ? now : current.deliveredAt,
+        },
+      },
+      { session: tx },
+    );
+    // No match means another request changed the status first; record nothing.
+    if (updated.matchedCount === 0) return false;
     if (intent !== "save") {
-      await tx.insert(fulfillmentEvents).values({ vendorOrderId, status: intent, note: vendorNote || null });
+      await db.fulfillmentEvents.insertOne(
+        { _id: newId(), vendorOrderId, status: intent, note: vendorNote || null, createdAt: now },
+        { session: tx },
+      );
     }
     if (intent === "cancelled") {
       // Return the cancelled units to stock.
-      const items = await tx
-        .select({ productId: orderItems.productId, quantity: orderItems.quantity })
-        .from(orderItems)
-        .where(eq(orderItems.vendorOrderId, vendorOrderId));
+      const items = await db.orderItems.find({ vendorOrderId }, { session: tx, projection: { productId: 1, quantity: 1 } }).toArray();
       for (const item of items) {
-        await tx.update(products).set({ stock: sql`${products.stock} + ${item.quantity}` }).where(eq(products.id, item.productId));
+        await db.products.updateOne({ _id: item.productId }, { $inc: { stock: item.quantity } }, { session: tx });
       }
     }
     return true;

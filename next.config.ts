@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // PGlite and pg ship native/wasm assets that must not be bundled.
-  serverExternalPackages: ["@electric-sql/pglite", "pg"],
+  // The MongoDB driver must be loaded by Node, not bundled.
+  serverExternalPackages: ["mongodb"],
   experimental: {
     // Vendors upload product photos through a server action.
     serverActions: { bodySizeLimit: "20mb" },

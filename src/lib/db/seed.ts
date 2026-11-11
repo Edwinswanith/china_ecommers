@@ -1,21 +1,9 @@
 import bcrypt from "bcryptjs";
-import { and, eq, inArray, sql } from "drizzle-orm";
 import { buildOrderDraft, type CartLine, type PricedProduct } from "@/lib/domain/cart";
 import type { FulfillmentStatus } from "@/lib/domain/fulfillment";
-import type { Db } from "./client";
+import { newId, type Db } from "./client";
 import { insertOrder } from "./order-writer";
-import {
-  categories,
-  fulfillmentEvents,
-  orderItems,
-  orders,
-  products,
-  reviews,
-  users,
-  vendorOrders,
-  vendors,
-  type ShippingAddress,
-} from "./schema";
+import type { Product, ShippingAddress } from "./schema";
 import { SEED_ADMIN, SEED_CATEGORIES, SEED_CUSTOMERS, SEED_PRODUCTS, SEED_VENDORS } from "./seed-data";
 
 const FLOW: readonly FulfillmentStatus[] = ["new", "accepted", "packed", "shipped", "delivered"];
@@ -78,70 +66,86 @@ async function advance(db: Db, vendorOrderId: string, target: FulfillmentStatus,
   const reached = (status: FulfillmentStatus): boolean => steps.includes(status);
   const at = (status: FulfillmentStatus): Date => daysAgo(Math.max(placedDaysAgo - STEP_AFTER_DAYS[status], 0));
   const packedWeight = weightGrams + 180;
-  await db
-    .update(vendorOrders)
-    .set({
-      status: target,
-      updatedAt: at(target),
-      ...(reached("packed") ? { packageCount: 1, weightGrams: packedWeight, ...boxFor(packedWeight) } : {}),
-      ...(reached("shipped") ? { carrier: "Placeholder Express", trackingNumber: `PX${vendorOrderId.slice(0, 8).toUpperCase()}`, shippedAt: at("shipped") } : {}),
-      ...(reached("delivered") ? { deliveredAt: at("delivered") } : {}),
-    })
-    .where(eq(vendorOrders.id, vendorOrderId));
-  await db.insert(fulfillmentEvents).values(steps.map((status) => ({ vendorOrderId, status, createdAt: at(status) })));
+  await db.vendorOrders.updateOne(
+    { _id: vendorOrderId },
+    {
+      $set: {
+        status: target,
+        updatedAt: at(target),
+        ...(reached("packed") ? { packageCount: 1, weightGrams: packedWeight, ...boxFor(packedWeight) } : {}),
+        ...(reached("shipped") ? { carrier: "Placeholder Express", trackingNumber: `PX${vendorOrderId.slice(0, 8).toUpperCase()}`, shippedAt: at("shipped") } : {}),
+        ...(reached("delivered") ? { deliveredAt: at("delivered") } : {}),
+      },
+    },
+  );
+  await db.fulfillmentEvents.insertMany(steps.map((status) => ({ _id: newId(), vendorOrderId, status, note: null, createdAt: at(status) })));
 }
 
 export async function seed(db: Db): Promise<void> {
   const password = process.env.SEED_PASSWORD;
   if (!password) throw new Error("SEED_PASSWORD is not set. Add it to .env.local before seeding demo data.");
   const passwordHash = await bcrypt.hash(password, 10);
+  const now = new Date();
 
-  await db.insert(users).values({ ...SEED_ADMIN, passwordHash, role: "admin" });
-  const customerRows = await db
-    .insert(users)
-    .values(SEED_CUSTOMERS.map((c) => ({ ...c, passwordHash, role: "customer" as const })))
-    .returning({ id: users.id, email: users.email });
-  const customerId = new Map(customerRows.map((c) => [c.email, c.id]));
+  await db.users.insertOne({ _id: newId(), ...SEED_ADMIN, passwordHash, role: "admin", createdAt: now });
+  const customerId = new Map<string, string>(SEED_CUSTOMERS.map((c) => [c.email, newId()]));
+  await db.users.insertMany(SEED_CUSTOMERS.map((c) => ({ _id: customerId.get(c.email)!, ...c, passwordHash, role: "customer" as const, createdAt: now })));
 
-  const categoryRows = await db.insert(categories).values([...SEED_CATEGORIES]).returning({ id: categories.id, slug: categories.slug });
-  const categoryId = new Map(categoryRows.map((c) => [c.slug, c.id]));
+  const categoryId = new Map<string, string>(SEED_CATEGORIES.map((c) => [c.slug, newId()]));
+  await db.categories.insertMany(SEED_CATEGORIES.map((c) => ({ _id: categoryId.get(c.slug)!, ...c })));
 
-  const vendorId = new Map<string, string>();
+  const vendorId = new Map<string, string>(SEED_VENDORS.map((v) => [v.key, newId()]));
   for (const v of SEED_VENDORS) {
-    const [owner] = await db.insert(users).values({ email: v.email, name: v.ownerName, passwordHash, role: "vendor" }).returning({ id: users.id });
-    const [vendor] = await db
-      .insert(vendors)
-      .values({ ownerId: owner.id, name: v.name, slug: v.slug, countryCode: v.countryCode, city: v.city, about: v.about, contactEmail: v.email })
-      .returning({ id: vendors.id });
-    vendorId.set(v.key, vendor.id);
+    const ownerId = newId();
+    await db.users.insertOne({ _id: ownerId, email: v.email, name: v.ownerName, passwordHash, role: "vendor", createdAt: now });
+    await db.vendors.insertOne({
+      _id: vendorId.get(v.key)!,
+      ownerId,
+      name: v.name,
+      slug: v.slug,
+      countryCode: v.countryCode,
+      city: v.city,
+      about: v.about,
+      contactEmail: v.email,
+      contactPhone: "",
+      status: "active",
+      createdAt: now,
+    });
   }
   const vendorKey = new Map([...vendorId].map(([key, id]) => [id, key]));
 
-  const productRows = await db
-    .insert(products)
-    .values(
-      SEED_PRODUCTS.map((p) => ({
-        vendorId: vendorId.get(p.vendor)!,
-        categoryId: categoryId.get(p.category)!,
-        slug: p.slug,
-        name: p.name,
-        tagline: p.tagline,
-        description: p.description,
-        highlights: p.highlights,
-        specs: p.specs,
-        faqs: p.faqs,
-        images: Array.from({ length: p.photos }, (_, i) => `/demo/${p.slug}-${i + 1}.jpg`),
-        sku: p.sku,
-        priceMinor: p.price * 100,
-        compareAtMinor: p.compareAt ? p.compareAt * 100 : null,
-        stock: p.stock,
-        weightGrams: p.weightGrams,
-        originCountry: SEED_VENDORS.find((v) => v.key === p.vendor)!.countryCode,
-      })),
-    )
-    .returning();
+  // Stagger creation times so "newest first" lists keep a stable, deliberate order.
+  const productRows: Product[] = SEED_PRODUCTS.map((p, index) => {
+    const createdAt = new Date(now.getTime() - index * 60_000);
+    return {
+      id: newId(),
+      vendorId: vendorId.get(p.vendor)!,
+      categoryId: categoryId.get(p.category)!,
+      slug: p.slug,
+      name: p.name,
+      tagline: p.tagline,
+      description: p.description,
+      highlights: p.highlights,
+      specs: p.specs,
+      faqs: p.faqs,
+      images: Array.from({ length: p.photos }, (_, i) => `/demo/${p.slug}-${i + 1}.jpg`),
+      sku: p.sku,
+      priceMinor: p.price * 100,
+      compareAtMinor: p.compareAt ? p.compareAt * 100 : null,
+      currency: "INR",
+      stock: p.stock,
+      weightGrams: p.weightGrams,
+      originCountry: SEED_VENDORS.find((v) => v.key === p.vendor)!.countryCode,
+      status: "active",
+      ratingSum: 0,
+      ratingCount: 0,
+      createdAt,
+      updatedAt: createdAt,
+    };
+  });
+  await db.products.insertMany(productRows.map(({ id, ...fields }) => ({ _id: id, ...fields })));
   const bySlug = new Map(productRows.map((p) => [p.slug, p]));
-  const weightById = new Map(productRows.map((p) => [p.id, p.weightGrams ?? 300]));
+  const weightById = new Map(productRows.map((p) => [p.id, p.weightGrams]));
   const catalog: PricedProduct[] = productRows.map((p) => ({
     id: p.id, vendorId: p.vendorId, name: p.name, image: p.images[0] ?? null,
     priceMinor: p.priceMinor, currency: p.currency, stock: p.stock, purchasable: true,
@@ -158,43 +162,37 @@ export async function seed(db: Db): Promise<void> {
       shippingAddress: ADDRESSES[seedOrder.customer],
       payment: { provider: "placeholder", reference: `seed-${index + 1}`, status: "paid" },
     });
+    // Backdate the order so the demo shows a few weeks of history.
     const placedAt = daysAgo(seedOrder.placedDaysAgo);
-    await db.update(orders).set({ createdAt: placedAt }).where(eq(orders.id, created.id));
-    await db.update(vendorOrders).set({ createdAt: placedAt, updatedAt: placedAt }).where(eq(vendorOrders.orderId, created.id));
-    await db
-      .update(fulfillmentEvents)
-      .set({ createdAt: placedAt })
-      .where(inArray(fulfillmentEvents.vendorOrderId, created.vendorOrderIds));
+    const vendorOrderIds = [...created.vendorOrderIds];
+    await db.orders.updateOne({ _id: created.id }, { $set: { createdAt: placedAt } });
+    await db.vendorOrders.updateMany({ orderId: created.id }, { $set: { createdAt: placedAt, updatedAt: placedAt } });
+    await db.fulfillmentEvents.updateMany({ vendorOrderId: { $in: vendorOrderIds } }, { $set: { createdAt: placedAt } });
     for (const [i, shipment] of result.draft.shipments.entries()) {
       const target = seedOrder.progress[vendorKey.get(shipment.vendorId)!];
       const weight = shipment.items.reduce((sum, item) => sum + item.quantity * (weightById.get(item.productId) ?? 300), 0);
-      if (target) await advance(db, created.vendorOrderIds[i], target, weight, seedOrder.placedDaysAgo);
+      if (target) await advance(db, vendorOrderIds[i], target, weight, seedOrder.placedDaysAgo);
     }
   }
 
   for (const r of SEED_REVIEWS) {
     const product = bySlug.get(r.slug)!;
     const userId = customerId.get(r.customer)!;
-    const [item] = await db
-      .select({ id: orderItems.id })
-      .from(orderItems)
-      .innerJoin(vendorOrders, eq(orderItems.vendorOrderId, vendorOrders.id))
-      .innerJoin(orders, eq(vendorOrders.orderId, orders.id))
-      .where(and(eq(orderItems.productId, product.id), eq(vendorOrders.status, "delivered"), eq(orders.customerId, userId)))
-      .limit(1);
-    if (!item) throw new Error(`Seed review for ${r.slug} has no delivered purchase by ${r.customer}.`);
-    await db.insert(reviews).values({ productId: product.id, userId, orderItemId: item.id, rating: r.rating, title: r.title, body: r.body });
-    await db
-      .update(products)
-      .set({ ratingSum: sql`${products.ratingSum} + ${r.rating}`, ratingCount: sql`${products.ratingCount} + 1` })
-      .where(eq(products.id, product.id));
+    // A seeded review must point at a delivered purchase by the same customer, like a real one.
+    const orderIds = (await db.orders.find({ customerId: userId }, { projection: { _id: 1 } }).toArray()).map((o) => o._id);
+    const items = await db.orderItems.find({ productId: product.id, orderId: { $in: orderIds } }).toArray();
+    const delivered = await db.vendorOrders.findOne({ _id: { $in: items.map((i) => i.vendorOrderId) }, status: "delivered" });
+    const item = items.find((i) => i.vendorOrderId === delivered?._id);
+    if (!item || !delivered) throw new Error(`Seed review for ${r.slug} has no delivered purchase by ${r.customer}.`);
+    const reviewedAt = new Date((delivered.deliveredAt ?? now).getTime() + DAY_MS);
+    await db.reviews.insertOne({ _id: newId(), productId: product.id, userId, orderItemId: item._id, rating: r.rating, title: r.title, body: r.body, createdAt: reviewedAt });
+    await db.products.updateOne({ _id: product.id }, { $inc: { ratingSum: r.rating, ratingCount: 1 } });
   }
 }
 
-/** Seed demo data the first time the embedded database is created. */
+/** Load demo data only when the database has no users yet. */
 export async function seedIfEmpty(db: Db): Promise<boolean> {
-  const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
-  if (row.count > 0) return false;
+  if ((await db.users.countDocuments()) > 0) return false;
   await seed(db);
   return true;
 }

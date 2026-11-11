@@ -1,15 +1,15 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { safeImageName } from "./storage-names";
+import { Binary } from "mongodb";
+import { getDb } from "@/lib/db/client";
+import { IMAGE_CONTENT_TYPES, safeImageName } from "./storage-names";
 
 /**
- * Product image storage. Files live on local disk under .data/uploads and are
- * served by /media/[name]. To move to S3/R2 later, reimplement these two
- * functions; nothing else references the filesystem.
+ * Product image storage. Uploaded photos are saved in the database (the
+ * `media` collection) and served by /media/[name], so they survive on
+ * serverless hosting where there is no permanent disk. To move to S3/R2
+ * later, reimplement these two functions; nothing else knows where files live.
  */
-const UPLOAD_DIR = path.join(process.cwd(), ".data", "uploads");
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const MAX_IMAGES_PER_PRODUCT = 6;
 
@@ -29,16 +29,14 @@ export async function saveProductImage(file: File): Promise<string> {
   const match = SIGNATURES.find((s) => s.test(bytes));
   if (!match) throw new ImageRejectedError(`${file.name} is not a JPG, PNG, WebP or AVIF image.`);
   const name = `${randomUUID()}.${match.ext}`;
-  await mkdir(UPLOAD_DIR, { recursive: true });
-  await writeFile(path.join(UPLOAD_DIR, name), bytes);
+  const db = await getDb();
+  await db.media.insertOne({ _id: name, contentType: IMAGE_CONTENT_TYPES[match.ext], data: new Binary(bytes), createdAt: new Date() });
   return `/media/${name}`;
 }
 
 export async function readProductImage(name: string): Promise<Buffer | null> {
   if (!safeImageName(name)) return null;
-  try {
-    return await readFile(path.join(UPLOAD_DIR, name));
-  } catch {
-    return null;
-  }
+  const db = await getDb();
+  const file = await db.media.findOne({ _id: name }, { projection: { data: 1 } });
+  return file ? Buffer.from(file.data.buffer) : null;
 }

@@ -1,13 +1,12 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { homeForRole, safeNextPath } from "@/lib/auth/paths";
 import { createSession, destroySession } from "@/lib/auth/session";
-import { getDb } from "@/lib/db/client";
-import { users, vendors } from "@/lib/db/schema";
+import { getDb, isDuplicateKeyError, newId, withTransaction, type Db, type Tx } from "@/lib/db/client";
+import type { User, UserRole } from "@/lib/db/schema";
 import { slugify, zodFormState, type FormState } from "@/lib/form-state";
 import { isRateLimited } from "@/lib/rate-limit";
 import { loginSchema, registerSchema, vendorRegisterSchema } from "@/lib/validation/schemas";
@@ -28,6 +27,26 @@ async function tooManyAttempts(scope: string, email: string): Promise<boolean> {
 
 const EMAIL_TAKEN: FormState = { ok: false, fieldErrors: { email: "An account with this email already exists. Sign in instead." } };
 
+interface NewUser {
+  readonly name: string;
+  readonly email: string;
+  readonly passwordHash: string;
+  readonly role: UserRole;
+}
+
+/** Returns null when the email is already registered. The unique index on email is the real guard. */
+async function insertUser(db: Db, input: NewUser, tx?: Tx): Promise<User | null> {
+  const user: User = { id: newId(), ...input, createdAt: new Date() };
+  const { id, ...fields } = user;
+  try {
+    await db.users.insertOne({ _id: id, ...fields }, { session: tx });
+    return user;
+  } catch (error: unknown) {
+    if (isDuplicateKeyError(error)) return null;
+    throw error;
+  }
+}
+
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = loginSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return zodFormState(parsed.error);
@@ -35,11 +54,11 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   if (await tooManyAttempts("login", email)) return TOO_MANY;
 
   const db = await getDb();
-  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const user = await db.users.findOne({ email });
   const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !valid) return { ok: false, message: "Email or password is incorrect." };
 
-  await createSession({ userId: user.id, role: user.role, name: user.name, email: user.email });
+  await createSession({ userId: user._id, role: user.role, name: user.name, email: user.email });
   const next = formData.get("next");
   redirect(safeNextPath(typeof next === "string" ? next : null, homeForRole(user.role)));
 }
@@ -51,28 +70,26 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
   if (await tooManyAttempts("register", email)) return TOO_MANY;
 
   const db = await getDb();
-  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
-  if (existing) return { ok: false, fieldErrors: { email: "An account with this email already exists. Sign in instead." } };
+  const existing = await db.users.findOne({ email }, { projection: { _id: 1 } });
+  if (existing) return EMAIL_TAKEN;
 
   const passwordHash = await bcrypt.hash(password, 10);
-  // The unique index is the real guard; two simultaneous sign-ups with one email end up here.
-  const [user] = await db
-    .insert(users)
-    .values({ name, email, passwordHash, role: "customer" })
-    .onConflictDoNothing({ target: users.email })
-    .returning();
+  // Two simultaneous sign-ups with one email end up here: the second one gets null.
+  const user = await insertUser(db, { name, email, passwordHash, role: "customer" });
   if (!user) return EMAIL_TAKEN;
   await createSession({ userId: user.id, role: user.role, name: user.name, email: user.email });
   const next = formData.get("next");
   redirect(safeNextPath(typeof next === "string" ? next : null, "/"));
 }
 
+class EmailTakenError extends Error {}
+
 async function uniqueVendorSlug(base: string): Promise<string> {
   const db = await getDb();
   const root = slugify(base) || "vendor";
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const candidate = attempt === 0 ? root : `${root}-${attempt + 1}`;
-    const [taken] = await db.select({ id: vendors.id }).from(vendors).where(eq(vendors.slug, candidate)).limit(1);
+    const taken = await db.vendors.findOne({ slug: candidate }, { projection: { _id: 1 } });
     if (!taken) return candidate;
   }
   return `${root}-${Date.now().toString(36)}`;
@@ -85,30 +102,39 @@ export async function registerVendorAction(_prev: FormState, formData: FormData)
   if (await tooManyAttempts("register", input.email)) return TOO_MANY;
 
   const db = await getDb();
-  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1);
+  const existing = await db.users.findOne({ email: input.email }, { projection: { _id: 1 } });
   if (existing) return { ok: false, fieldErrors: { email: "An account with this email already exists." } };
 
   const passwordHash = await bcrypt.hash(input.password, 10);
   const slug = await uniqueVendorSlug(input.businessName);
-  const user = await db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(users)
-      .values({ name: input.name, email: input.email, passwordHash, role: "vendor" })
-      .onConflictDoNothing({ target: users.email })
-      .returning();
-    if (!created) return null;
-    await tx.insert(vendors).values({
-      ownerId: created.id,
-      name: input.businessName,
-      slug,
-      countryCode: input.countryCode,
-      city: input.city,
-      about: input.about,
-      contactEmail: input.email,
-      contactPhone: input.contactPhone,
+  // The account and its vendor profile are created together or not at all.
+  let user: User | null;
+  try {
+    user = await withTransaction(db, async (tx) => {
+      const created = await insertUser(db, { name: input.name, email: input.email, passwordHash, role: "vendor" }, tx);
+      if (!created) throw new EmailTakenError();
+      await db.vendors.insertOne(
+        {
+          _id: newId(),
+          ownerId: created.id,
+          name: input.businessName,
+          slug,
+          countryCode: input.countryCode,
+          city: input.city,
+          about: input.about,
+          contactEmail: input.email,
+          contactPhone: input.contactPhone,
+          status: "active",
+          createdAt: new Date(),
+        },
+        { session: tx },
+      );
+      return created;
     });
-    return created;
-  });
+  } catch (error: unknown) {
+    if (!(error instanceof EmailTakenError)) throw error;
+    user = null;
+  }
 
   if (!user) return EMAIL_TAKEN;
   await createSession({ userId: user.id, role: user.role, name: user.name, email: user.email });

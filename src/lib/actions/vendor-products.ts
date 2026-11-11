@@ -1,26 +1,24 @@
 "use server";
 
-import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireVendor } from "@/lib/auth/guards";
-import { getDb } from "@/lib/db/client";
-import { categories, products } from "@/lib/db/schema";
+import { getDb, newId } from "@/lib/db/client";
 import { toMinor } from "@/lib/domain/money";
 import { slugify, zodFormState, type FormState } from "@/lib/form-state";
 import { ImageRejectedError, MAX_IMAGES_PER_PRODUCT, saveProductImage } from "@/lib/storage";
 import { parseFaqs, parseHighlights, parseSpecs } from "@/lib/validation/product-text";
 import { productSchema } from "@/lib/validation/schemas";
 
-const IMAGE_PATH = /^\/(media|seed)\/[A-Za-z0-9._-]+$/;
+const IMAGE_PATH = /^\/(media|demo)\/[A-Za-z0-9._-]+$/;
 
 async function uniqueProductSlug(name: string): Promise<string> {
   const db = await getDb();
   const root = slugify(name) || "product";
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const candidate = attempt === 0 ? root : `${root}-${attempt + 1}`;
-    const [taken] = await db.select({ id: products.id }).from(products).where(eq(products.slug, candidate)).limit(1);
+    const taken = await db.products.findOne({ slug: candidate }, { projection: { _id: 1 } });
     if (!taken) return candidate;
   }
   return `${root}-${Date.now().toString(36)}`;
@@ -55,7 +53,7 @@ export async function saveProductAction(_prev: FormState, formData: FormData): P
   }
 
   const db = await getDb();
-  const [category] = await db.select({ id: categories.id }).from(categories).where(eq(categories.id, input.categoryId)).limit(1);
+  const category = await db.categories.findOne({ _id: input.categoryId }, { projection: { _id: 1 } });
   if (!category) return { ok: false, fieldErrors: { categoryId: "Choose a category." } };
 
   const productId = formData.get("productId");
@@ -63,11 +61,10 @@ export async function saveProductAction(_prev: FormState, formData: FormData): P
   let existingImages: readonly string[] = [];
   if (editing) {
     if (!z.uuid().safeParse(productId).success) return { ok: false, message: "Product not found." };
-    const [current] = await db
-      .select({ images: products.images })
-      .from(products)
-      .where(and(eq(products.id, productId), eq(products.vendorId, vendor.id), ne(products.status, "archived")))
-      .limit(1);
+    const current = await db.products.findOne(
+      { _id: productId, vendorId: vendor.id, status: { $ne: "archived" } },
+      { projection: { images: 1 } },
+    );
     if (!current) return { ok: false, message: "Product not found." };
     existingImages = current.images;
   }
@@ -102,20 +99,23 @@ export async function saveProductAction(_prev: FormState, formData: FormData): P
   };
 
   if (editing) {
-    const updated = await db
-      .update(products)
-      .set(values)
+    const updated = await db.products.updateOne(
       // Archived products (removed by the vendor or taken down by the admin) cannot be edited back to life.
-      .where(and(eq(products.id, productId), eq(products.vendorId, vendor.id), ne(products.status, "archived")))
-      .returning({ id: products.id });
-    if (updated.length === 0) return { ok: false, message: "Product not found." };
+      { _id: productId, vendorId: vendor.id, status: { $ne: "archived" } },
+      { $set: values },
+    );
+    if (updated.matchedCount === 0) return { ok: false, message: "Product not found." };
   } else {
-    await db.insert(products).values({
+    await db.products.insertOne({
       ...values,
+      _id: newId(),
       vendorId: vendor.id,
       slug: await uniqueProductSlug(input.name),
       currency: "INR",
       originCountry: vendor.countryCode,
+      ratingSum: 0,
+      ratingCount: 0,
+      createdAt: values.updatedAt,
     });
   }
 
@@ -130,9 +130,6 @@ export async function archiveProductAction(formData: FormData): Promise<void> {
   const parsed = archiveInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const db = await getDb();
-  await db
-    .update(products)
-    .set({ status: "archived", updatedAt: new Date() })
-    .where(and(eq(products.id, parsed.data.productId), eq(products.vendorId, vendor.id)));
+  await db.products.updateOne({ _id: parsed.data.productId, vendorId: vendor.id }, { $set: { status: "archived", updatedAt: new Date() } });
   revalidatePath("/", "layout");
 }

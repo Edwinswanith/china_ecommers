@@ -6,12 +6,18 @@ A curated marketplace for inventive electronics. Vendors in any of 24 countries 
 
 ## Run it
 
+The store keeps all its data in MongoDB (for example a free MongoDB Atlas cluster).
+
+1. Copy `.env.example` to `.env.local` and fill it in: `MONGODB_URI` (your connection string), `MONGODB_DB`, `SESSION_SECRET` and `SEED_PASSWORD`.
+2. Install, load the demo data once, and start:
+
 ```bash
 npm install
+npm run db:seed
 npm run dev
 ```
 
-No database setup is needed. With `DATABASE_URL` empty, the app runs an embedded Postgres (PGlite) stored in `.data/`, creates the schema, and loads demo data on first start.
+Indexes are created automatically on first connection. In Atlas, allow your IP address under Network Access, or the connection will time out.
 
 Demo accounts (password is `SEED_PASSWORD` in `.env.local`):
 
@@ -25,9 +31,9 @@ Demo accounts (password is `SEED_PASSWORD` in `.env.local`):
 
 The demo data is 12 sample products, 5 customers in Chennai and 8 orders at different stages. A step-by-step script for showing it to a client is in [docs/DEMO-WALKTHROUGH.md](docs/DEMO-WALKTHROUGH.md).
 
-> **Demo photos:** the images in `public/demo/` come from public supplier listings and are for private demonstration only. Keep this repository private and replace them with the vendors' own photos before any public launch.
+> **Demo photos:** the images in `public/demo/` come from public supplier listings and are for private demonstration only. Do not use them on a public site; replace them with the vendors' own photos before any public launch.
 
-Other commands: `npm test` (unit tests), `npm run build`, `npm run db:reset` (wipe and re-seed the local database; stop the dev server first).
+Other commands: `npm test` (unit tests), `npm run build`, `npm run db:reset` (delete everything in the configured MongoDB database and load the demo data again).
 
 ## How it works
 
@@ -39,7 +45,7 @@ Other commands: `npm test` (unit tests), `npm run build`, `npm run db:reset` (wi
 
 ### Rules enforced in code
 
-- **Order splitting.** A cart with items from several vendors becomes one order with one shipment (`vendor_orders` row) per vendor. `src/lib/domain/cart.ts`
+- **Order splitting.** A cart with items from several vendors becomes one order with one shipment (a `vendor_orders` document) per vendor. `src/lib/domain/cart.ts`
 - **Prices are server-side.** The browser sends only product ids and quantities; prices and stock are read from the database at checkout. Stock is decremented with a guarded update so the last unit cannot be sold twice. `src/lib/db/order-writer.ts`
 - **Verified reviews.** A review requires a paid, delivered purchase of that product, one review per customer per product (also a unique index). `src/lib/domain/reviews.ts`
 - **Vendor isolation.** Every vendor query and update is scoped by the signed-in vendor's id.
@@ -49,7 +55,7 @@ Other commands: `npm test` (unit tests), `npm run build`, `npm run db:reset` (wi
 | Area | Where | What to do |
 | --- | --- | --- |
 | Payment gateway | `src/lib/payments.ts` | Implement `charge()` against the real gateway and set `PAYMENTS_ARE_LIVE`. Orders are currently marked paid without charging. |
-| Shipping cost and customs duty | `buildOrderDraft` in `src/lib/domain/cart.ts` | `shippingMinor` and `dutiesMinor` are `0`. The order tables already store both. |
+| Shipping cost and customs duty | `buildOrderDraft` in `src/lib/domain/cart.ts` | `shippingMinor` and `dutiesMinor` are `0`. Orders already store both. |
 | Carrier tracking | `vendor_orders.carrier`, `tracking_number` | Vendors type these in by hand; "delivered" is set by the vendor. Replace with carrier webhooks. |
 | Returns, terms, privacy, shipping copy | `src/lib/config/policies.ts` | Replace the draft text. Pages show a "Draft" tag until `placeholder` is set to `false`. |
 | Notifications | — | Not built. Vendors see new orders in their portal. The hook point is after `insertOrder` in `src/lib/actions/checkout.ts`. |
@@ -71,18 +77,24 @@ src/app/(store)/     storefront: home, catalogue, product, cart, checkout, order
 src/app/vendor/      vendor portal
 src/app/admin/       admin panel
 src/lib/domain/      pure business rules, unit tested (money, cart split, fulfilment, reviews)
-src/lib/db/          schema, connection, order writer, seed
+src/lib/db/          record shapes, MongoDB connection and indexes, order writer, seed
 src/lib/data/        read queries per area
 src/lib/actions/     server actions (all writes)
 src/lib/config/      brand, markets and currencies, policies, FAQs
-drizzle/             SQL migrations
 ```
+
+## Deploying to Vercel
+
+1. Import the GitHub repository in Vercel.
+2. Under Settings → Environment Variables add `MONGODB_URI`, `MONGODB_DB`, `SESSION_SECRET` and `NEXT_PUBLIC_SITE_URL` (the Vercel address, no trailing slash).
+3. In MongoDB Atlas → Network Access, allow access from anywhere (`0.0.0.0/0`). Vercel does not use fixed IP addresses.
+4. Deploy. The site reads the same database you seeded with `npm run db:seed`.
 
 ## Going to production
 
-1. Create a Postgres database and set `DATABASE_URL`, then run `npm run db:migrate`.
+1. Create a separate MongoDB database for production and set `MONGODB_URI` and `MONGODB_DB`. It must be a replica set (every Atlas cluster is): checkout, reviews and shipment updates use transactions.
 2. Set a fresh `SESSION_SECRET` (`openssl rand -hex 32`) and `NEXT_PUBLIC_SITE_URL`.
-3. Move image uploads off local disk: reimplement the two functions in `src/lib/storage.ts` against S3 or R2. Local disk does not persist on serverless hosts.
+3. Uploaded product photos are stored in the `media` collection (4 MB limit each), which is fine to start with. For a large catalogue, reimplement the two functions in `src/lib/storage.ts` against S3 or R2.
 4. Replace the in-memory rate limiter in `src/lib/rate-limit.ts` with a shared store if running more than one instance.
 5. Create the admin account directly in the database; there is no public admin sign-up.
 

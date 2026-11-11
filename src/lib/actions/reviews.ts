@@ -1,11 +1,9 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
 import { getReviewContext } from "@/lib/data/orders";
-import { getDb } from "@/lib/db/client";
-import { products, reviews } from "@/lib/db/schema";
+import { getDb, newId, withTransaction } from "@/lib/db/client";
 import { findReviewablePurchase, REVIEW_BLOCK_MESSAGES } from "@/lib/domain/reviews";
 import { zodFormState, type FormState } from "@/lib/form-state";
 import { reviewSchema } from "@/lib/validation/schemas";
@@ -25,13 +23,18 @@ export async function submitReviewAction(_prev: FormState, formData: FormData): 
 
   const db = await getDb();
   try {
-    const slug = await db.transaction(async (tx) => {
-      await tx.insert(reviews).values({ productId, userId: session.userId, orderItemId: eligibility.orderItemId, rating, title, body });
-      const [updated] = await tx
-        .update(products)
-        .set({ ratingSum: sql`${products.ratingSum} + ${rating}`, ratingCount: sql`${products.ratingCount} + 1` })
-        .where(eq(products.id, productId))
-        .returning({ slug: products.slug });
+    // The review and the product's rating totals are saved together or not at all.
+    const slug = await withTransaction(db, async (tx) => {
+      await db.reviews.insertOne(
+        { _id: newId(), productId, userId: session.userId, orderItemId: eligibility.orderItemId, rating, title, body, createdAt: new Date() },
+        { session: tx },
+      );
+      const updated = await db.products.findOneAndUpdate(
+        { _id: productId },
+        { $inc: { ratingSum: rating, ratingCount: 1 } },
+        { session: tx, projection: { slug: 1 } },
+      );
+      if (!updated) throw new Error(`Reviewed product ${productId} no longer exists.`);
       return updated.slug;
     });
     revalidatePath(`/products/${slug}`);

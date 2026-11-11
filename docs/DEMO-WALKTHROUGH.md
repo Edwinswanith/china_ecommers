@@ -6,7 +6,7 @@ A 10 to 15 minute demo that follows one order from the customer, to the vendor, 
 
 1. Start the store: `npm run dev`, then open http://localhost:3000.
 2. All demo accounts share one password. It is the value of `SEED_PASSWORD` in `.env.local`.
-3. To put the demo data back to its starting state at any time: stop the dev server, then run `npm run db:reset`.
+3. To put the demo data back to its starting state at any time, run `npm run db:reset`. This deletes everything in the database, including any orders placed during a demo, and loads the demo data again.
 4. Use two browser windows (one normal, one private) so you can stay signed in as a customer and a vendor at the same time.
 
 | Who | Sign in as | What they are |
