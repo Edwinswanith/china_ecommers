@@ -42,6 +42,8 @@ export function CheckoutForm({ defaultName, paymentsLive }: CheckoutFormProps) {
       if (result.ok) {
         setPlaced(true);
         cart.clear();
+        // Start the confirmation page at the top, so the thank-you message is not hidden under the header.
+        window.scrollTo({ top: 0, behavior: "instant" });
         router.push(`/orders/${result.orderId}?placed=1`);
         return;
       }
@@ -66,7 +68,7 @@ export function CheckoutForm({ defaultName, paymentsLive }: CheckoutFormProps) {
           <p className="mt-2 text-[14.5px] text-subtle">We deliver anywhere in India. Your address is shared only with the sellers shipping your order.</p>
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
             <TextField label="Full name" name="fullName" defaultValue={defaultName} autoComplete="name" required error={fieldErrors.fullName} />
-            <TextField label="Mobile number" name="phone" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10-digit number" required error={fieldErrors.phone} />
+            <TextField label="Mobile number" name="phone" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10-digit number" pattern="[6-9][0-9]{9}" title="Enter a 10-digit Indian mobile number." maxLength={10} required error={fieldErrors.phone} />
             <div className="sm:col-span-2">
               <TextField label="Address line 1" name="line1" autoComplete="address-line1" placeholder="House / flat, street" required error={fieldErrors.line1} />
             </div>
@@ -74,7 +76,7 @@ export function CheckoutForm({ defaultName, paymentsLive }: CheckoutFormProps) {
               <TextField label="Address line 2 (optional)" name="line2" autoComplete="address-line2" placeholder="Area, landmark" error={fieldErrors.line2} />
             </div>
             <TextField label="City" name="city" autoComplete="address-level2" required error={fieldErrors.city} />
-            <TextField label="PIN code" name="postalCode" inputMode="numeric" autoComplete="postal-code" maxLength={6} required error={fieldErrors.postalCode} />
+            <TextField label="PIN code" name="postalCode" inputMode="numeric" autoComplete="postal-code" maxLength={6} pattern="[1-9][0-9]{5}" title="Enter a 6-digit PIN code." required error={fieldErrors.postalCode} />
             <div className="sm:col-span-2">
               <SelectField label="State" name="state" autoComplete="address-level1" required defaultValue="" error={fieldErrors.state}>
                 <option value="" disabled>Choose a state</option>

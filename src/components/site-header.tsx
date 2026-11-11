@@ -45,9 +45,9 @@ export async function SiteHeader() {
       <div className="shell flex h-16 items-center gap-4 md:gap-8">
         <Wordmark />
 
-        <form action="/products" method="get" role="search" className="relative hidden flex-1 md:block">
+        <form action="/products" method="get" role="search" className="group relative hidden max-w-[520px] flex-1 transition-[max-width] duration-300 ease-out focus-within:max-w-[760px] md:block">
           <label htmlFor="header-search" className="sr-only">Search products</label>
-          <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle" aria-hidden="true" />
+          <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle transition-colors group-focus-within:text-brand" aria-hidden="true" />
           <input
             id="header-search"
             type="search"
@@ -58,7 +58,7 @@ export async function SiteHeader() {
           />
         </form>
 
-        <div className="ml-auto flex items-center gap-1 md:ml-0">
+        <div className="ml-auto flex items-center gap-1">
           <Link href={account.href} className={navAction}>
             <AccountIcon size={19} aria-hidden="true" />
             <span className="hidden sm:inline">{account.label}</span>
@@ -76,7 +76,7 @@ export async function SiteHeader() {
         <form action="/products" method="get" role="search" className="relative">
           <label htmlFor="header-search-mobile" className="sr-only">Search products</label>
           <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle" aria-hidden="true" />
-          <input id="header-search-mobile" type="search" name="q" maxLength={80} placeholder="Search for gadgets" className="h-11 w-full rounded-full border border-line bg-muted pl-11 pr-4 text-[15px] placeholder:text-subtle focus:border-brand focus:bg-white focus:outline-none" />
+          <input id="header-search-mobile" type="search" name="q" maxLength={80} placeholder="Search for gadgets" className="h-11 w-full rounded-full border border-line bg-muted pl-11 pr-4 text-[15px] transition-all placeholder:text-subtle focus:border-brand focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand/15" />
         </form>
       </div>
 

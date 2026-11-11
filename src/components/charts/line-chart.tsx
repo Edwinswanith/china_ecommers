@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { compactMoney, niceCeiling } from "./scale";
 import { formatMoney } from "@/lib/domain/money";
 
@@ -37,6 +37,8 @@ const DEFAULT_WIDTH = 720;
 const GRID = "#e4e8ee";
 const AXIS_TEXT = "#5b6577";
 const SURFACE = "#ffffff";
+/** The lines take about a second to draw; the dots, fill and forecast follow once they have arrived. */
+const AFTER_DRAW = { "--fade-delay": "1s" } as CSSProperties;
 
 function linePath(points: ReadonlyArray<readonly [number, number]>): string {
   return points.map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
@@ -46,12 +48,29 @@ export function LineChart({ title, labels, series, forecast, currency, height = 
   const wrapper = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [active, setActive] = useState<number | null>(null);
+  const [onScreen, setOnScreen] = useState(false);
   const descriptionId = useId();
 
   useEffect(() => {
     const element = wrapper.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => setWidth(Math.max(280, Math.round(entry.contentRect.width))));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // Hold the draw-in animation until the chart has scrolled into view, so it is actually seen.
+  useEffect(() => {
+    const element = wrapper.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setOnScreen(true);
+        observer.disconnect();
+      },
+      { threshold: 0.25 },
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -71,6 +90,8 @@ export function LineChart({ title, labels, series, forecast, currency, height = 
   const showLabel = (index: number): boolean => (count - 1 - index) % labelEvery === 0;
 
   const primary = series[0];
+  // Changes when a different period is shown, so the lines draw in again for the new data.
+  const drawKey = `${labels.length}-${labels[0] ?? ""}`;
   const lastActual = historyCount - 1;
   const forecastLine = forecast && primary
     ? linePath([[x(lastActual), y(primary.values[lastActual])], ...forecast.points.map((value, i) => [x(historyCount + i), y(value)] as const)])
@@ -101,7 +122,7 @@ export function LineChart({ title, labels, series, forecast, currency, height = 
   const money = (value: number): string => formatMoney(value, currency);
 
   return (
-    <div ref={wrapper} className="relative">
+    <div ref={wrapper} className={`relative ${onScreen ? "" : "chart-waiting"}`}>
       {series.length > 1 ? (
         <ul className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-subtle">
           {series.map((s) => (
@@ -149,7 +170,7 @@ export function LineChart({ title, labels, series, forecast, currency, height = 
         )}
 
         {forecast && forecastBand && forecastLine && primary ? (
-          <g>
+          <g key={`forecast-${drawKey}`} className="fade-in" style={AFTER_DRAW}>
             <path d={forecastBand} fill={primary.color} opacity={0.1} />
             <path d={forecastLine} fill="none" stroke={primary.color} strokeWidth={2} strokeDasharray="5 5" strokeLinecap="round" />
             <line x1={x(lastActual)} x2={x(lastActual)} y1={MARGIN.top} y2={baseline} stroke={GRID} strokeWidth={1} />
@@ -163,12 +184,12 @@ export function LineChart({ title, labels, series, forecast, currency, height = 
           const points = s.values.map((value, index) => [x(index), y(value)] as const);
           const end = points[points.length - 1];
           return (
-            <g key={s.name}>
+            <g key={`${s.name}-${drawKey}`}>
               {seriesIndex === 0 && series.length === 1 && points.length > 1 ? (
-                <path d={`${linePath(points)} L${end[0].toFixed(1)},${baseline} L${points[0][0].toFixed(1)},${baseline} Z`} fill={s.color} opacity={0.1} />
+                <path d={`${linePath(points)} L${end[0].toFixed(1)},${baseline} L${points[0][0].toFixed(1)},${baseline} Z`} fill={s.color} opacity={0.1} className="fade-in" style={{ "--fade-delay": "0.5s" } as CSSProperties} />
               ) : null}
-              <path d={linePath(points)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-              {end ? <circle cx={end[0]} cy={end[1]} r={4.5} fill={s.color} stroke={SURFACE} strokeWidth={2} /> : null}
+              <path d={linePath(points)} pathLength={1} className="draw-in" fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              {end ? <circle cx={end[0]} cy={end[1]} r={4.5} fill={s.color} stroke={SURFACE} strokeWidth={2} className="fade-in" style={AFTER_DRAW} /> : null}
             </g>
           );
         })}

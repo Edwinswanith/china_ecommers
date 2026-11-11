@@ -94,6 +94,10 @@ export interface Product {
   weightGrams: number;
   originCountry: string;
   status: ProductStatus;
+  /** Who removed an archived product. A vendor can only undo their own removal, never an admin takedown. */
+  archivedBy?: "vendor" | "admin" | null;
+  /** What the product was before it was archived, so an undo can put it back. */
+  statusBeforeArchive?: ProductStatus | null;
   ratingSum: number;
   ratingCount: number;
   createdAt: Date;

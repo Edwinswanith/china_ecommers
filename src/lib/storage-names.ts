@@ -11,3 +11,7 @@ export const IMAGE_CONTENT_TYPES: Readonly<Record<string, string>> = {
   webp: "image/webp",
   avif: "image/avif",
 };
+
+/** Upload limits, shared by the server check and the upload form. */
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_IMAGES_PER_PRODUCT = 6;

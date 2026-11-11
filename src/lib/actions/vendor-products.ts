@@ -130,6 +130,29 @@ export async function archiveProductAction(formData: FormData): Promise<void> {
   const parsed = archiveInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const db = await getDb();
-  await db.products.updateOne({ _id: parsed.data.productId, vendorId: vendor.id }, { $set: { status: "archived", updatedAt: new Date() } });
+  const owned = { _id: parsed.data.productId, vendorId: vendor.id };
+  const current = await db.products.findOne({ ...owned, status: { $ne: "archived" } }, { projection: { status: 1 } });
+  if (!current) return;
+  await db.products.updateOne(
+    { ...owned, status: current.status },
+    { $set: { status: "archived", archivedBy: "vendor", statusBeforeArchive: current.status, updatedAt: new Date() } },
+  );
+  revalidatePath("/", "layout");
+}
+
+/** Undo for the vendor's own "Remove". Products taken down by the admin stay down. */
+export async function restoreProductAction(formData: FormData): Promise<void> {
+  const { vendor } = await requireVendor();
+  if (vendor.status !== "active") return;
+  const parsed = archiveInput.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return;
+  const db = await getDb();
+  const removed = { _id: parsed.data.productId, vendorId: vendor.id, status: "archived" as const, archivedBy: "vendor" as const };
+  const current = await db.products.findOne(removed, { projection: { statusBeforeArchive: 1 } });
+  if (!current) return;
+  await db.products.updateOne(
+    removed,
+    { $set: { status: current.statusBeforeArchive === "active" ? "active" : "draft", archivedBy: null, statusBeforeArchive: null, updatedAt: new Date() } },
+  );
   revalidatePath("/", "layout");
 }

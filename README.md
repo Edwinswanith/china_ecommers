@@ -102,3 +102,12 @@ src/lib/config/      brand, markets and currencies, policies, FAQs
 ## Adding another market
 
 Markets and currencies are configuration (`src/lib/config/markets.ts`). Orders already record `market_country` and `currency`, and money is stored in minor units. Selling in a second country needs a new market entry, prices in that currency, and that country's address form.
+
+## Motion and feedback
+
+Small animations confirm what just happened; none of them are needed to use the site.
+
+- Shared styles live in `src/app/globals.css` under "Micro-interactions". Reusable pieces are in `src/components/ui/`: `nav-progress` (page-loading bar), `skeletons` (used by the `loading.tsx` files), `toast` (confirmations with Undo), `confirm-action` (two-step row buttons), `animated-number`, `reveal` and `change-flash`.
+- Everything respects the visitor's "reduce motion" setting, and content that animates in is shown immediately when scripts are off.
+- Form fields check themselves when the user leaves them, using the rules already on the input (`required`, `type`, `minLength`, `pattern`). The server still validates everything again.
+- A vendor can undo their own "Remove" from the confirmation toast. Products taken down by the admin can only be restored by the admin.

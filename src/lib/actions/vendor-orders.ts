@@ -7,6 +7,15 @@ import { canTransition, FULFILLMENT_LABELS, validateShipReadiness, type PackageD
 import { zodFormState, type FormState } from "@/lib/form-state";
 import { packageSchema, shipmentUpdateSchema } from "@/lib/validation/schemas";
 
+const DONE_MESSAGES: Readonly<Record<string, string>> = {
+  save: "Details saved.",
+  accepted: "Order accepted.",
+  packed: "Marked as packed.",
+  shipped: "Marked as shipped. The customer can now see the tracking number.",
+  delivered: "Marked as delivered.",
+  cancelled: "Shipment cancelled. The items are back in stock.",
+};
+
 const PACKAGE_FIELDS = ["packageCount", "weightGrams", "lengthCm", "widthCm", "heightCm"] as const;
 
 function hasPackageInput(formData: FormData): boolean {
@@ -92,5 +101,5 @@ export async function updateShipmentAction(_prev: FormState, formData: FormData)
   revalidatePath("/vendor", "layout");
   revalidatePath("/admin", "layout");
   revalidatePath("/orders", "layout");
-  return { ok: true, message: intent === "save" ? "Details saved." : `Marked ${FULFILLMENT_LABELS[intent].toLowerCase()}.` };
+  return { ok: true, message: DONE_MESSAGES[intent] ?? "Saved." };
 }

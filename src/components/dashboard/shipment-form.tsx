@@ -1,14 +1,15 @@
 "use client";
 
 import { Lightbulb } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { TextAreaField, TextField } from "@/components/forms/field";
 import { FormMessage } from "@/components/forms/form-message";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { showToast } from "@/components/ui/toast";
 import { updateShipmentAction } from "@/lib/actions/vendor-orders";
 import type { VendorOrder } from "@/lib/db/schema";
 import { nextStatuses, type FulfillmentStatus } from "@/lib/domain/fulfillment";
-import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 const ACTION_LABELS: Readonly<Partial<Record<FulfillmentStatus, string>>> = {
   accepted: "Accept order",
@@ -26,8 +27,16 @@ const NEXT_STEP_HELP: Readonly<Record<FulfillmentStatus, string>> = {
   cancelled: "This shipment was cancelled.",
 };
 
+/** Runs the update and confirms success with a toast, which survives the page refreshing underneath it. */
+async function updateAndConfirm(previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await updateShipmentAction(previous, formData);
+  if (result.ok && result.message) showToast({ message: result.message });
+  return result;
+}
+
 export function ShipmentForm({ shipment }: { shipment: VendorOrder }) {
-  const [state, action] = useActionState(updateShipmentAction, EMPTY_FORM_STATE);
+  const [state, action] = useActionState(updateAndConfirm, EMPTY_FORM_STATE);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const forward = nextStatuses(shipment.status).filter((s) => s !== "cancelled");
   const canCancel = nextStatuses(shipment.status).includes("cancelled");
   const packageEditable = shipment.status === "new" || shipment.status === "accepted" || shipment.status === "packed";
@@ -73,11 +82,17 @@ export function ShipmentForm({ shipment }: { shipment: VendorOrder }) {
               </SubmitButton>
             ))}
             <SubmitButton name="intent" value="save" className="btn btn-ghost" pendingLabel="Saving…">Save details</SubmitButton>
-            {canCancel ? (
-              <SubmitButton name="intent" value="cancelled" className="ml-auto cursor-pointer rounded-lg px-3 py-2 text-[14px] font-medium text-danger transition-colors hover:bg-red-50" pendingLabel="Cancelling…">
+            {!canCancel ? null : confirmingCancel ? (
+              <span className="animate-fade ml-auto flex flex-wrap items-center gap-2" role="group" aria-label="Confirm cancelling this shipment">
+                <span className="text-[13.5px] font-semibold">Cancel this shipment? This cannot be undone.</span>
+                <SubmitButton name="intent" value="cancelled" className="btn btn-sm bg-danger text-white hover:bg-[#a82222]" pendingLabel="Cancelling…">Yes, cancel it</SubmitButton>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmingCancel(false)}>Keep it</button>
+              </span>
+            ) : (
+              <button type="button" className="ml-auto cursor-pointer rounded-lg px-3 py-2 text-[14px] font-medium text-danger transition-colors hover:bg-red-50" onClick={() => setConfirmingCancel(true)}>
                 Cancel shipment
-              </SubmitButton>
-            ) : null}
+              </button>
+            )}
           </div>
         )}
       </div>

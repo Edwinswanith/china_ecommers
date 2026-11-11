@@ -24,6 +24,6 @@ export async function setProductStatusAction(formData: FormData): Promise<void> 
   const parsed = productStatusInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const db = await getDb();
-  await db.products.updateOne({ _id: parsed.data.productId }, { $set: { status: parsed.data.status, updatedAt: new Date() } });
+  await db.products.updateOne({ _id: parsed.data.productId }, { $set: { status: parsed.data.status, archivedBy: parsed.data.status === "archived" ? "admin" : null, updatedAt: new Date() } });
   revalidatePath("/", "layout");
 }

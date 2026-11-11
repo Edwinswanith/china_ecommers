@@ -1,5 +1,6 @@
-import { Check, ChevronLeft, MapPin, ReceiptText, Star } from "lucide-react";
+import { ChevronLeft, MapPin, ReceiptText, Star } from "lucide-react";
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -34,7 +35,11 @@ export default async function OrderPage({ params, searchParams }: PageProps) {
         <>
           <CheckoutSteps current={3} />
           <div className="animate-rise mb-8 mt-6 flex flex-col gap-4 rounded-3xl bg-ok-soft p-6 sm:flex-row sm:items-center md:p-8" role="status">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-ok text-white"><Check size={28} strokeWidth={3} aria-hidden="true" /></span>
+            <span className="pop-in grid h-14 w-14 shrink-0 place-items-center rounded-full bg-ok text-white">
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path className="draw-in" pathLength={1} d="M5 12.5l4.5 4.5L19 7.5" style={{ "--draw-time": "0.45s", "--draw-delay": "0.45s" } as CSSProperties} />
+              </svg>
+            </span>
             <div>
               <p className="display text-2xl md:text-3xl">Thank you, {session.name.split(" ")[0]}. Your order is placed.</p>
               <p className="mt-1.5 max-w-2xl text-[15.5px] text-subtle">

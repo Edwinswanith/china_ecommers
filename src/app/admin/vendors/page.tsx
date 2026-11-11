@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/guards";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/dashboard/shell";
 import { Badge } from "@/components/status-badge";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 import { setVendorStatusAction } from "@/lib/actions/admin";
 import { countryName } from "@/lib/config/markets";
 import { listVendorSales } from "@/lib/data/admin";
@@ -49,11 +50,19 @@ export default async function AdminVendorsPage() {
                   <td className="num text-right font-semibold">{formatMoney(vendor.revenueMinor, "INR")}</td>
                   <td>{suspended ? <Badge tone="signal">Suspended</Badge> : <Badge tone="ok">Active</Badge>}</td>
                   <td className="text-right">
-                    <form action={setVendorStatusAction}>
-                      <input type="hidden" name="vendorId" value={vendor.id} />
-                      <input type="hidden" name="status" value={suspended ? "active" : "suspended"} />
-                      <button type="submit" className="btn btn-ghost btn-sm">{suspended ? "Reinstate" : "Suspend"}</button>
-                    </form>
+                    {suspended ? (
+                      <ConfirmAction action={setVendorStatusAction} fields={{ vendorId: vendor.id, status: "active" }} label="Reinstate" ariaLabel={`Reinstate ${vendor.name}`} doneMessage={`${vendor.name} reinstated. Their products are back on the store.`} />
+                    ) : (
+                      <ConfirmAction
+                        action={setVendorStatusAction}
+                        fields={{ vendorId: vendor.id, status: "suspended" }}
+                        label="Suspend"
+                        ariaLabel={`Suspend ${vendor.name}`}
+                        confirm={{ question: "Hide all their products?", yes: "Yes, suspend" }}
+                        doneMessage={`${vendor.name} suspended. Their products are hidden.`}
+                        undo={{ action: setVendorStatusAction, fields: { vendorId: vendor.id, status: "active" } }}
+                      />
+                    )}
                   </td>
                 </tr>
               );

@@ -6,6 +6,7 @@ import { JsonLd } from "@/components/json-ld";
 import { ProductCard } from "@/components/product-card";
 import { ProductImage } from "@/components/product-image";
 import { RatingSummary } from "@/components/rating";
+import { Reveal } from "@/components/ui/reveal";
 import { BRAND } from "@/lib/config/brand";
 import { STORE_FAQS } from "@/lib/config/faq";
 import { countryName } from "@/lib/config/markets";
@@ -123,10 +124,11 @@ export default async function HomePage() {
       <section className="shell pt-16" aria-labelledby="categories-heading">
         <SectionHeading id="categories-heading" title="Shop by category" />
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {categories.map((category) => {
+          {categories.map((category, index) => {
             const Icon = CATEGORY_ICONS[category.slug] ?? Sparkles;
             return (
               <li key={category.id}>
+                <Reveal delay={index * 70} className="h-full">
                 <Link href={`/collections/${category.slug}`} className="lift group flex h-full flex-col rounded-2xl border border-line bg-white p-5">
                   <span className="grid h-12 w-12 place-items-center rounded-xl bg-muted text-fg transition-colors group-hover:bg-brand group-hover:text-white"><Icon size={22} aria-hidden="true" /></span>
                   <span className="mt-4 text-[16.5px] font-semibold tracking-tight">{category.name}</span>
@@ -135,6 +137,7 @@ export default async function HomePage() {
                     Browse <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
                   </span>
                 </Link>
+                </Reveal>
               </li>
             );
           })}
@@ -153,7 +156,7 @@ export default async function HomePage() {
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {grid.map((product, index) => (
-              <ProductCard key={product.id} product={product} priority={index < 4} />
+              <Reveal key={product.id} delay={(index % 4) * 70} className="h-full"><ProductCard product={product} priority={index < 4} /></Reveal>
             ))}
           </div>
         )}
@@ -167,13 +170,15 @@ export default async function HomePage() {
           </div>
           <ol className="mt-10 grid gap-5 md:grid-cols-3">
             {STEPS.map(({ icon: Icon, title, text }, index) => (
-              <li key={title} className="rounded-2xl border border-line bg-white p-6 shadow-[var(--shadow-card)]">
+              <li key={title}>
+                <Reveal delay={index * 110} className="h-full rounded-2xl border border-line bg-white p-6 shadow-[var(--shadow-card)]">
                 <div className="flex items-center justify-between">
                   <span className="grid h-12 w-12 place-items-center rounded-xl bg-brand text-white"><Icon size={22} aria-hidden="true" /></span>
                   <span className="num text-[13px] font-semibold text-subtle">Step {index + 1}</span>
                 </div>
                 <h3 className="mt-5 text-[17px] font-semibold tracking-tight">{title}</h3>
                 <p className="mt-2 text-[15px] leading-relaxed text-subtle">{text}</p>
+                </Reveal>
               </li>
             ))}
           </ol>
@@ -186,19 +191,19 @@ export default async function HomePage() {
             <h2 id="faq-heading" className="display text-2xl md:text-[1.9rem]">Questions, answered</h2>
             <p className="mt-2 text-[16px] text-subtle">Everything you need to know before you buy.</p>
           </div>
-          <FaqList faqs={STORE_FAQS} />
+          <Reveal><FaqList faqs={STORE_FAQS} /></Reveal>
         </div>
       </section>
 
       <section className="shell pt-16" aria-labelledby="sell-heading">
-        <div className="flex flex-col items-start justify-between gap-6 rounded-3xl bg-fg p-8 text-white md:flex-row md:items-center md:p-12">
+        <Reveal className="flex flex-col items-start justify-between gap-6 rounded-3xl bg-fg p-8 text-white md:flex-row md:items-center md:p-12">
           <div className="max-w-xl">
             <p className="flex items-center gap-2 text-[14px] font-medium text-white/70"><Store size={17} aria-hidden="true" /> For makers and vendors</p>
             <h2 id="sell-heading" className="display mt-3 text-2xl md:text-3xl">Have a product people will love? Sell it here.</h2>
             <p className="mt-3 text-[15.5px] leading-relaxed text-white/75">Open a vendor account, add your product and start receiving orders from customers across India.</p>
           </div>
           <Link href="/sell" className="btn btn-lg shrink-0 bg-white text-fg hover:bg-white/90">Become a vendor <ArrowRight size={18} aria-hidden="true" /></Link>
-        </div>
+        </Reveal>
       </section>
     </>
   );

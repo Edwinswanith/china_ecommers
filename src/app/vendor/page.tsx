@@ -33,10 +33,10 @@ export default async function VendorOverviewPage({ searchParams }: VendorOvervie
     <>
       <PageHeader eyebrow={vendor.name} title="Overview" action={<Link href="/vendor/products/new" className="btn btn-primary"><Plus size={17} aria-hidden="true" /> Add product</Link>} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile icon={Inbox} label="New orders" value={String(stats.byStatus.new)} note="Waiting for you to accept" tone={stats.byStatus.new > 0 ? "signal" : "default"} href="/vendor/orders?view=open" />
-        <StatTile icon={PackageOpen} label="To pack and ship" value={String(stats.byStatus.accepted + stats.byStatus.packed)} note={`${stats.byStatus.shipped} in transit`} href="/vendor/orders?view=open" />
-        <StatTile icon={IndianRupee} label="Sales" value={formatMoney(stats.revenueMinor, "INR")} note={`${stats.byStatus.delivered} delivered`} tone="dark" />
-        <StatTile icon={Boxes} label="Live products" value={String(stats.productCount)} note={stats.lowStockCount > 0 ? `${stats.lowStockCount} low on stock` : "Stock levels healthy"} href="/vendor/products" />
+        <StatTile icon={Inbox} label="New orders" value={String(stats.byStatus.new)} count={{ value: stats.byStatus.new, format: "count" }} note="Waiting for you to accept" tone={stats.byStatus.new > 0 ? "signal" : "default"} href="/vendor/orders?view=open" />
+        <StatTile icon={PackageOpen} label="To pack and ship" value={String(stats.byStatus.accepted + stats.byStatus.packed)} count={{ value: stats.byStatus.accepted + stats.byStatus.packed, format: "count" }} note={`${stats.byStatus.shipped} in transit`} href="/vendor/orders?view=open" />
+        <StatTile icon={IndianRupee} label="Sales" value={formatMoney(stats.revenueMinor, "INR")} count={{ value: stats.revenueMinor, format: "money" }} note={`${stats.byStatus.delivered} delivered`} tone="dark" />
+        <StatTile icon={Boxes} label="Live products" value={String(stats.productCount)} count={{ value: stats.productCount, format: "count" }} note={stats.lowStockCount > 0 ? `${stats.lowStockCount} low on stock` : "Stock levels healthy"} href="/vendor/products" />
       </div>
       <section className="mt-10" aria-labelledby="open-heading">
         <div className="mb-4 flex items-end justify-between">

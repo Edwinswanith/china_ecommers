@@ -2,6 +2,7 @@ import { ChevronRight, SearchX } from "lucide-react";
 import Link from "next/link";
 import type { ProductListing, ProductSort } from "@/lib/data/catalog";
 import type { Category } from "@/lib/db/schema";
+import { Reveal } from "./ui/reveal";
 import { ProductCard } from "./product-card";
 import { SortSelect } from "./sort-select";
 
@@ -27,6 +28,8 @@ interface CatalogueViewProps {
   /** Path the sort control submits to. */
   basePath: string;
 }
+
+const FIRST_ROW = 4;
 
 export function CatalogueView({ title, intro, products, categories, activeCategory, sort, query, basePath }: CatalogueViewProps) {
   return (
@@ -76,9 +79,14 @@ export function CatalogueView({ title, intro, products, categories, activeCatego
         </div>
       ) : (
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {products.map((product, index) => (
-            <ProductCard key={product.id} product={product} priority={index < 4} />
-          ))}
+          {products.map((product, index) =>
+            // The first row is on screen straight away, so it is shown without waiting for an animation.
+            index < FIRST_ROW ? (
+              <ProductCard key={product.id} product={product} priority />
+            ) : (
+              <Reveal key={product.id} delay={(index % FIRST_ROW) * 70} className="h-full"><ProductCard product={product} /></Reveal>
+            ),
+          )}
         </div>
       )}
     </div>

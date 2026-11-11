@@ -1,4 +1,5 @@
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { AnimatedNumber, type NumberFormat } from "@/components/ui/animated-number";
 import Link from "next/link";
 import { LineChart } from "@/components/charts/line-chart";
 import type { PeriodComparison, SalesHistory, TopProduct } from "@/lib/data/analytics";
@@ -38,11 +39,11 @@ function ChangeChip({ change, against }: { change: number | null; against: strin
   );
 }
 
-function ComparisonTile({ label, value, comparison, against }: { label: string; value: string; comparison: PeriodComparison; against: string }) {
+function ComparisonTile({ label, format, comparison, against }: { label: string; format: NumberFormat; comparison: PeriodComparison; against: string }) {
   return (
     <div className="panel p-5">
       <p className="label text-subtle">{label}</p>
-      <p className="num mt-1.5 text-[1.65rem] font-bold leading-tight tracking-tight">{value}</p>
+      <p className="num mt-1.5 text-[1.65rem] font-bold leading-tight tracking-tight"><AnimatedNumber value={comparison.current} format={format} currency={CURRENCY} countUpOnMount /></p>
       <ChangeChip change={comparison.change} against={against} />
     </div>
   );
@@ -148,10 +149,10 @@ export function SalesAnalytics({ basePath, view, history, topProducts, ordersLab
       <h2 id="trends-heading" className="text-[18px] font-bold tracking-tight">Sales trends</h2>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <ComparisonTile label="Sales, last 30 days" value={formatMoney(history.sales30.current, CURRENCY)} comparison={history.sales30} against="vs the 30 days before" />
-        <ComparisonTile label="Sales, last 7 days" value={formatMoney(history.sales7.current, CURRENCY)} comparison={history.sales7} against="vs the 7 days before" />
-        <ComparisonTile label={`${ordersLabel}, last 30 days`} value={String(history.orders30.current)} comparison={history.orders30} against="vs the 30 days before" />
-        <ComparisonTile label="Average order value" value={formatMoney(history.averageOrder30.current, CURRENCY)} comparison={history.averageOrder30} against="vs the 30 days before" />
+        <ComparisonTile label="Sales, last 30 days" format="money" comparison={history.sales30} against="vs the 30 days before" />
+        <ComparisonTile label="Sales, last 7 days" format="money" comparison={history.sales7} against="vs the 7 days before" />
+        <ComparisonTile label={`${ordersLabel}, last 30 days`} format="count" comparison={history.orders30} against="vs the 30 days before" />
+        <ComparisonTile label="Average order value" format="money" comparison={history.averageOrder30} against="vs the 30 days before" />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[2fr_1fr]">

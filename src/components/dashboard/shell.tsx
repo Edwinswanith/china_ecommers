@@ -2,6 +2,7 @@ import { ArrowUpRight, ExternalLink, LogOut, type LucideIcon } from "lucide-reac
 import Link from "next/link";
 import { logoutAction } from "@/lib/actions/auth";
 import { Wordmark } from "../site-header";
+import { AnimatedNumber, type NumberFormat } from "../ui/animated-number";
 import { NavLinks, type NavItem } from "./nav-links";
 
 interface DashboardShellProps {
@@ -62,7 +63,10 @@ export function PageHeader({ eyebrow, title, action }: PageHeaderProps) {
 
 interface StatTileProps {
   label: string;
+  /** The figure as text. Used as-is unless `count` is given. */
   value: string;
+  /** The same figure as a number, so it can count up when the page opens. */
+  count?: { value: number; format: NumberFormat };
   note?: string;
   icon?: LucideIcon;
   /** "signal" draws attention to a number that needs action. */
@@ -72,14 +76,14 @@ interface StatTileProps {
 
 const ICON_TONES = { default: "bg-muted text-fg", signal: "bg-amber-50 text-amber-700", dark: "bg-brand-soft text-brand" } as const;
 
-export function StatTile({ label, value, note, icon: Icon, tone = "default", href }: StatTileProps) {
+export function StatTile({ label, value, count, note, icon: Icon, tone = "default", href }: StatTileProps) {
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
         <p className="text-[14px] font-medium text-subtle">{label}</p>
         {Icon ? <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${ICON_TONES[tone]}`}><Icon size={18} aria-hidden="true" /></span> : null}
       </div>
-      <p className="num mt-2 text-[1.75rem] font-bold leading-tight tracking-tight">{value}</p>
+      <p className="num mt-2 text-[1.75rem] font-bold leading-tight tracking-tight">{count ? <AnimatedNumber value={count.value} format={count.format} countUpOnMount /> : value}</p>
       {note ? (
         <p className="mt-1.5 flex items-center gap-1 text-[13.5px] text-subtle">
           {note}

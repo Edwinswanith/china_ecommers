@@ -49,10 +49,10 @@ export default async function AdminOverviewPage({ searchParams }: AdminOverviewP
       <PageHeader eyebrow="All vendors · India market" title="Overview" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile icon={IndianRupee} label="Total sales" value={formatMoney(overview.grossSalesMinor, "INR")} note={`Average order ${formatMoney(overview.averageOrderMinor, "INR")}`} tone="dark" />
-        <StatTile icon={ShoppingCart} label="Orders placed" value={String(overview.orderCount)} note={`${overview.customerCount} customers`} href="/admin/orders" />
-        <StatTile icon={Hourglass} label="Shipments pending" value={String(pending)} note={`${overview.shipments.new} not yet accepted by the vendor`} tone={pending > 0 ? "signal" : "default"} href="/admin/orders?view=pending" />
-        <StatTile icon={CircleCheckBig} label="Delivered shipments" value={String(overview.shipments.delivered)} note={`${overview.shipments.shipped} in transit`} />
+        <StatTile icon={IndianRupee} label="Total sales" value={formatMoney(overview.grossSalesMinor, "INR")} count={{ value: overview.grossSalesMinor, format: "money" }} note={`Average order ${formatMoney(overview.averageOrderMinor, "INR")}`} tone="dark" />
+        <StatTile icon={ShoppingCart} label="Orders placed" value={String(overview.orderCount)} count={{ value: overview.orderCount, format: "count" }} note={`${overview.customerCount} customers`} href="/admin/orders" />
+        <StatTile icon={Hourglass} label="Shipments pending" value={String(pending)} count={{ value: pending, format: "count" }} note={`${overview.shipments.new} not yet accepted by the vendor`} tone={pending > 0 ? "signal" : "default"} href="/admin/orders?view=pending" />
+        <StatTile icon={CircleCheckBig} label="Delivered shipments" value={String(overview.shipments.delivered)} count={{ value: overview.shipments.delivered, format: "count" }} note={`${overview.shipments.shipped} in transit`} />
       </div>
 
       <section className="panel mt-6 p-5" aria-labelledby="pipeline-heading">

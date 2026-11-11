@@ -24,7 +24,7 @@ export function VendorOrdersTable({ rows, emptyText }: { rows: Rows; emptyText: 
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id}>
+            <tr key={row.id} className={row.status === "new" ? "row-flash" : undefined}>
               <td className="num whitespace-nowrap font-semibold">{row.order.number}</td>
               <td className="whitespace-nowrap text-subtle">{formatDate(row.order.createdAt)}</td>
               <td className="max-w-xs">{row.items.map((i) => `${i.name} × ${i.quantity}`).join(", ")}</td>

@@ -6,7 +6,9 @@ import { PageHeader } from "@/components/dashboard/shell";
 import { ShipmentForm } from "@/components/dashboard/shipment-form";
 import { AddressBlock } from "@/components/order-summary";
 import { ProductImage } from "@/components/product-image";
+import { ShipmentProgress } from "@/components/shipment-progress";
 import { FulfillmentBadge } from "@/components/status-badge";
+import { ChangeFlash } from "@/components/ui/change-flash";
 import { requireVendor } from "@/lib/auth/guards";
 import { getVendorOrder } from "@/lib/data/vendor";
 import { FULFILLMENT_LABELS } from "@/lib/domain/fulfillment";
@@ -32,8 +34,13 @@ export default async function VendorOrderPage({ params }: PageProps) {
     <>
       <Link href="/vendor/orders" className="inline-flex items-center gap-1 text-[14px] font-medium text-subtle transition-colors hover:text-fg">← Orders</Link>
       <div className="mt-3">
-        <PageHeader eyebrow={`Placed ${formatDateTime(shipment.order.createdAt)}`} title={`Order ${shipment.order.number}`} action={<FulfillmentBadge status={shipment.status} />} />
+        <PageHeader eyebrow={`Placed ${formatDateTime(shipment.order.createdAt)}`} title={`Order ${shipment.order.number}`} action={<ChangeFlash watch={shipment.status}><FulfillmentBadge status={shipment.status} /></ChangeFlash>} />
       </div>
+      {shipment.status === "cancelled" ? null : (
+        <div className="panel mb-6 px-3 py-5 sm:px-5">
+          <ShipmentProgress status={shipment.status} />
+        </div>
+      )}
       <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
         <div className="space-y-6">
           <section className="panel" aria-labelledby="items-heading">
@@ -65,7 +72,7 @@ export default async function VendorOrderPage({ params }: PageProps) {
             <h2 id="history-heading" className="mb-3 text-[14px] font-semibold">History</h2>
             <ol className="space-y-2.5">
               {events.map((event) => (
-                <li key={event.id} className="flex gap-3 text-[14px]">
+                <li key={event.id} className="animate-fade flex gap-3 text-[14px]">
                   <span className="mt-[7px] h-2 w-2 shrink-0 rounded-full bg-brand" aria-hidden="true" />
                   <span>
                     <span className="font-medium">{event.status === "new" ? "Order received" : FULFILLMENT_LABELS[event.status]}</span>

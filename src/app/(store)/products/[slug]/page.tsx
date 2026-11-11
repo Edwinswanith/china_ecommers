@@ -1,4 +1,5 @@
 import { Check, ChevronRight, type LucideIcon, MapPin, PackageCheck, Store, Truck } from "lucide-react";
+import { Reveal } from "@/components/ui/reveal";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -100,7 +101,7 @@ export default async function ProductPage({ params }: PageProps) {
             </p>
 
             <div className="mt-6">
-              <AddToCart productId={product.id} stock={product.stock} />
+              <AddToCart productId={product.id} stock={product.stock} name={product.name} priceLabel={formatMoney(product.priceMinor, product.currency)} />
             </div>
 
             <ul className="mt-6 divide-y divide-line rounded-2xl border border-line">
@@ -163,12 +164,14 @@ export default async function ProductPage({ params }: PageProps) {
           <section className="mt-16" aria-labelledby="related-heading">
             <h2 id="related-heading" className="display mb-6 text-2xl md:text-[1.9rem]">You may also like</h2>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {related.map((item) => (
-                <ProductCard key={item.id} product={item} />
+              {related.map((item, index) => (
+                <Reveal key={item.id} delay={index * 70} className="h-full"><ProductCard product={item} /></Reveal>
               ))}
             </div>
           </section>
         ) : null}
+        {/* Leaves room for the buy bar that sits at the bottom of the screen on phones. */}
+        <div className="h-16 lg:hidden" aria-hidden="true" />
       </div>
     </>
   );

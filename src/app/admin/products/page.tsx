@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/dashboard/shell";
 import { ProductImage } from "@/components/product-image";
 import { Badge } from "@/components/status-badge";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 import { setProductStatusAction } from "@/lib/actions/admin";
 import { listAllProducts } from "@/lib/data/admin";
 import { formatMoney } from "@/lib/domain/money";
@@ -54,12 +55,18 @@ export default async function AdminProductsPage() {
                   {product.status === "active" ? <Badge tone="ok">Live</Badge> : product.status === "draft" ? <Badge tone="neutral">Draft</Badge> : <Badge tone="muted">Removed</Badge>}
                 </td>
                 <td className="text-right">
-                  {product.status === "draft" ? null : (
-                    <form action={setProductStatusAction}>
-                      <input type="hidden" name="productId" value={product.id} />
-                      <input type="hidden" name="status" value={product.status === "active" ? "archived" : "active"} />
-                      <button type="submit" className="btn btn-ghost btn-sm">{product.status === "active" ? "Take down" : "Restore"}</button>
-                    </form>
+                  {product.status === "draft" ? null : product.status === "active" ? (
+                    <ConfirmAction
+                      action={setProductStatusAction}
+                      fields={{ productId: product.id, status: "archived" }}
+                      label="Take down"
+                      ariaLabel={`Take down ${product.name}`}
+                      confirm={{ question: "Remove from the store?", yes: "Yes, take down" }}
+                      doneMessage={`${product.name} taken down.`}
+                      undo={{ action: setProductStatusAction, fields: { productId: product.id, status: "active" } }}
+                    />
+                  ) : (
+                    <ConfirmAction action={setProductStatusAction} fields={{ productId: product.id, status: "active" }} label="Restore" ariaLabel={`Restore ${product.name}`} doneMessage={`${product.name} is live again.`} />
                   )}
                 </td>
               </tr>

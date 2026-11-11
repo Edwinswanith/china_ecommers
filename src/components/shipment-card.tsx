@@ -1,19 +1,13 @@
-import { Check, CircleCheckBig, ClipboardCheck, Package, PackageCheck, Truck, type LucideIcon } from "lucide-react";
+import { CircleCheckBig } from "lucide-react";
 import { countryName } from "@/lib/config/markets";
 import type { FulfillmentStatus, OrderItem, VendorOrder } from "@/lib/db/schema";
 import { FULFILLMENT_LABELS } from "@/lib/domain/fulfillment";
 import { formatMoney } from "@/lib/domain/money";
 import { formatDateTime, formatWeight } from "@/lib/format";
 import { ProductImage } from "./product-image";
+import { progressRank, ShipmentProgress } from "./shipment-progress";
 import { FulfillmentBadge } from "./status-badge";
-
-const STEPS: ReadonlyArray<{ status: FulfillmentStatus; label: string; icon: LucideIcon }> = [
-  { status: "new", label: "Ordered", icon: ClipboardCheck },
-  { status: "accepted", label: "Confirmed", icon: Check },
-  { status: "packed", label: "Packed", icon: Package },
-  { status: "shipped", label: "Shipped", icon: Truck },
-  { status: "delivered", label: "Delivered", icon: PackageCheck },
-];
+import { ChangeFlash } from "./ui/change-flash";
 
 interface ShipmentCardProps {
   index: number;
@@ -28,11 +22,9 @@ interface ShipmentCardProps {
 
 /** One seller's part of an order: items, progress tracker, package and tracking details. */
 export function ShipmentCard({ index, total, currency, shipment }: ShipmentCardProps) {
-  const reached = STEPS.findIndex((s) => s.status === shipment.status);
   const cancelled = shipment.status === "cancelled";
   // Newest first; events logged in the same instant fall back to their natural order in the flow.
-  const rank = (status: FulfillmentStatus): number => STEPS.findIndex((s) => s.status === status);
-  const events = [...shipment.events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || rank(b.status) - rank(a.status));
+  const events = [...shipment.events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || progressRank(b.status) - progressRank(a.status));
   const hasPackage = shipment.packageCount !== null && shipment.weightGrams !== null;
 
   return (
@@ -44,26 +36,13 @@ export function ShipmentCard({ index, total, currency, shipment }: ShipmentCardP
           </p>
           <h3 className="mt-0.5 text-[17px] font-semibold tracking-tight">Sold by {shipment.vendor.name}</h3>
         </div>
-        <FulfillmentBadge status={shipment.status} />
+        <ChangeFlash watch={shipment.status}><FulfillmentBadge status={shipment.status} /></ChangeFlash>
       </header>
 
       {cancelled ? (
         <p className="border-b border-line bg-muted px-5 py-3 text-[14px] text-subtle">This delivery was cancelled.</p>
       ) : (
-        <ol className="flex border-b border-line px-3 py-5 sm:px-5" aria-label="Delivery progress">
-          {STEPS.map(({ status, label, icon: Icon }, i) => {
-            const done = i <= reached;
-            return (
-              <li key={status} className="relative flex flex-1 flex-col items-center text-center" aria-current={i === reached ? "step" : undefined}>
-                {i > 0 ? <span className={`absolute right-1/2 top-[18px] h-0.5 w-full -translate-y-1/2 ${done ? "bg-ok" : "bg-line"}`} aria-hidden="true" /> : null}
-                <span className={`relative z-10 grid h-9 w-9 place-items-center rounded-full transition-colors ${done ? "bg-ok text-white" : "bg-muted text-subtle"} ${i === reached ? "ring-4 ring-ok/20" : ""}`}>
-                  <Icon size={17} aria-hidden="true" />
-                </span>
-                <span className={`mt-2 text-[12px] font-medium sm:text-[13px] ${done ? "text-fg" : "text-subtle"}`}>{label}</span>
-              </li>
-            );
-          })}
-        </ol>
+        <ShipmentProgress status={shipment.status} className="border-b border-line px-3 py-5 sm:px-5" />
       )}
 
       <ul className="divide-y divide-line px-5">

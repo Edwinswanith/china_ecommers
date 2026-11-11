@@ -3,7 +3,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/dashboard/shell";
 import { ProductImage } from "@/components/product-image";
 import { Badge } from "@/components/status-badge";
-import { archiveProductAction } from "@/lib/actions/vendor-products";
+import { ConfirmAction } from "@/components/ui/confirm-action";
+import { archiveProductAction, restoreProductAction } from "@/lib/actions/vendor-products";
 import { requireVendor } from "@/lib/auth/guards";
 import { listVendorProducts, LOW_STOCK_THRESHOLD } from "@/lib/data/vendor";
 import { formatMoney } from "@/lib/domain/money";
@@ -57,10 +58,15 @@ export default async function VendorProductsPage({ searchParams }: PageProps) {
                     <div className="flex justify-end gap-2">
                       {product.status === "active" ? <Link href={`/products/${product.slug}`} className="btn btn-ghost btn-sm">View</Link> : null}
                       <Link href={`/vendor/products/${product.id}`} className="btn btn-ghost btn-sm">Edit</Link>
-                      <form action={archiveProductAction}>
-                        <input type="hidden" name="productId" value={product.id} />
-                        <button type="submit" className="btn btn-ghost btn-sm" aria-label={`Remove ${product.name}`}>Remove</button>
-                      </form>
+                      <ConfirmAction
+                        action={archiveProductAction}
+                        fields={{ productId: product.id }}
+                        label="Remove"
+                        ariaLabel={`Remove ${product.name}`}
+                        confirm={{ question: "Remove from the store?", yes: "Yes, remove" }}
+                        doneMessage={`${product.name} removed.`}
+                        undo={{ action: restoreProductAction, fields: { productId: product.id } }}
+                      />
                     </div>
                   </td>
                 </tr>

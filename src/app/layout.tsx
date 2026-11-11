@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { NavProgress } from "@/components/ui/nav-progress";
+import { Toaster } from "@/components/ui/toast";
 import { BRAND } from "@/lib/config/brand";
 import "./globals.css";
 
@@ -20,7 +22,15 @@ export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width"
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en-IN" className={jakarta.variable}>
-      <body className="flex min-h-screen flex-col bg-white">{children}</body>
+      <body className="flex min-h-screen flex-col bg-white">
+        {/* Without scripts nothing can reveal the animated content, so show it straight away. */}
+        <noscript>
+          <style>{".reveal{opacity:1;transform:none}.count-pending{visibility:visible}.chart-waiting .draw-in{stroke-dashoffset:0}.chart-waiting .fade-in{visibility:visible}"}</style>
+        </noscript>
+        <NavProgress />
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }

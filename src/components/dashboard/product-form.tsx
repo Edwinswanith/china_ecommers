@@ -6,6 +6,8 @@ import { SelectField, TextAreaField, TextField } from "@/components/forms/field"
 import { FormMessage } from "@/components/forms/form-message";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { ProductImage } from "@/components/product-image";
+import { MAX_IMAGE_BYTES, MAX_IMAGES_PER_PRODUCT } from "@/lib/storage-names";
+import { PhotoPicker } from "./photo-picker";
 import { saveProductAction } from "@/lib/actions/vendor-products";
 import type { Category, Product } from "@/lib/db/schema";
 import { fromMinor } from "@/lib/domain/money";
@@ -55,11 +57,7 @@ export function ProductForm({ categories, product }: ProductFormProps) {
               ))}
             </ul>
           ) : null}
-          <div>
-            <label htmlFor="images" className="field-label">{product ? "Add more photos" : "Upload photos"}</label>
-            <input id="images" name="images" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple className="input file:mr-4 file:border-0 file:rounded-md file:bg-fg file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-white" aria-describedby={errors.images ? "images-error" : undefined} />
-            {errors.images ? <p id="images-error" role="alert" className="mt-1.5 text-[13px] font-medium text-danger">{errors.images}</p> : null}
-          </div>
+          <PhotoPicker label={product ? "Add more photos" : "Upload photos"} error={errors.images} maxBytes={MAX_IMAGE_BYTES} maxFiles={MAX_IMAGES_PER_PRODUCT} />
         </section>
       </div>
 

@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { Binary } from "mongodb";
 import { getDb } from "@/lib/db/client";
-import { IMAGE_CONTENT_TYPES, safeImageName } from "./storage-names";
+import { IMAGE_CONTENT_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES_PER_PRODUCT, safeImageName } from "./storage-names";
 
 /**
  * Product image storage. Uploaded photos are saved in the database (the
@@ -10,8 +10,7 @@ import { IMAGE_CONTENT_TYPES, safeImageName } from "./storage-names";
  * serverless hosting where there is no permanent disk. To move to S3/R2
  * later, reimplement these two functions; nothing else knows where files live.
  */
-export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-export const MAX_IMAGES_PER_PRODUCT = 6;
+export { MAX_IMAGE_BYTES, MAX_IMAGES_PER_PRODUCT };
 
 const SIGNATURES: ReadonlyArray<{ ext: string; test: (b: Buffer) => boolean }> = [
   { ext: "jpg", test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
